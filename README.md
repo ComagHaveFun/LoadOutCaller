@@ -104,16 +104,6 @@ Use per-mode `Always on …` toggles to customize the behavior per context.
 
 Translations for non-English locales were done with reasonable care but have not been reviewed by native speakers for every language. Native-speaker corrections welcome - strings live in `Locales/<locale>.lua`, keyed by their English original.
 
-## Tech / internals
-
-- Events: `PLAYER_ENTERING_WORLD`, `READY_CHECK`, `PLAYER_SPECIALIZATION_CHANGED`, `ROLE_CHANGED_INFORM`, `START_TIMER` (filtered to `timerType == 1` for PvP begin), `ADDON_LOADED`, `PLAYER_LOGIN`.
-- Loadout name: `C_ClassTalents.GetLastSelectedSavedConfigID(specID)` → `C_Traits.GetConfigInfo().name`.
-- Instance classification: `GetInstanceInfo()` → `instanceType` + `maxPlayers`. Arena is split into 2v2 (4 players) vs 3v3 (6 players, covers Solo Shuffle).
-- Role detection: `UnitGroupRolesAssigned("player")` vs `GetSpecializationInfo(GetSpecialization())` (5th return is the spec's natural role).
-- TTS: `C_VoiceChat.SpeakText` with `Enum.VoiceTtsDestination.LocalPlayback`, fallback signature in `pcall`.
-- Edit Mode integration via `hooksecurefunc(EditModeManagerFrame, "EnterEditMode" / "ExitEditMode")`.
-- Options panel registered via the modern `Settings.RegisterCanvasLayoutCategory` API.
-
 ## License
 
 MIT
