@@ -1,0 +1,23 @@
+## Interface: 120001
+## Title: |cff3FC7EBLoadOut|rCaller
+## Notes: Announces your active talent loadout on instance enter or ready check - via text, chat, TTS and sound. Per-mode triggers for Mythic+, Raids, Delves, Arena 2v2/3v3, and Battlegrounds. Never pull with your questing build again.
+## Author: Comag-Malfurion (Have Fun)
+## Version: 1.2.0
+## SavedVariables: LoadOutCallerDB
+## OptionalDeps: LibSharedMedia-3.0
+## IconTexture: Interface\Icons\INV_Inscription_Tarot_Warrior
+
+Locales\enUS.lua
+Locales\deDE.lua
+Locales\frFR.lua
+Locales\esES.lua
+Locales\esMX.lua
+Locales\itIT.lua
+Locales\ptBR.lua
+Locales\ruRU.lua
+Locales\koKR.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
+
+Core.lua
+Options.lua

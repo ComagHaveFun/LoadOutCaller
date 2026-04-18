@@ -1,0 +1,3 @@
+local ADDON_NAME, ns = ...
+
+ns.L = setmetatable({}, { __index = function(t, k) return k end })

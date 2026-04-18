@@ -1,0 +1,32 @@
+# IDEs / editors
+.idea/
+.vscode/
+*.iml
+*.code-workspace
+
+# Editor backup / swap files
+*~
+*.bak
+*.tmp
+*.swp
+*.swo
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build / package artifacts
+*.zip
+*.tar
+*.tar.gz
+*.7z
+dist/
+build/
+
+# Logs
+*.log
+
+# WoW SavedVariables (should never land in the repo)
+*.lua.bak
+WTF/
