@@ -2,16 +2,32 @@ local ADDON_NAME, ns = ...
 
 local L = ns.L or setmetatable({}, { __index = function(t, k) return k end })
 
-local panel
-local category
+local rootCategory
 local widgets = {}
 
-local function MakeSectionHeader(parent, text, anchor, yOffset)
+local SKIP_KEYWORD_TOOLTIP = L["Skip keyword: if your active loadout name contains this word (case-insensitive), the announcement is skipped for that mode."]
+
+local function MakeSectionHeader(parent, text, yOffset)
     local fs = parent:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    fs:SetPoint("TOPLEFT", anchor or parent, "TOPLEFT", 16, yOffset)
+    fs:SetPoint("TOPLEFT", parent, "TOPLEFT", 16, yOffset)
     fs:SetText(text)
     fs:SetTextColor(1, 0.82, 0)
     return fs
+end
+
+local function ApplyTooltip(frame, label, tooltip)
+    if not tooltip then return end
+    frame:HookScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        if label then
+            GameTooltip:SetText(label, 1, 1, 1)
+            GameTooltip:AddLine(tooltip, nil, nil, nil, true)
+        else
+            GameTooltip:SetText(tooltip, 1, 1, 1, 1, true)
+        end
+        GameTooltip:Show()
+    end)
+    frame:HookScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
 local function MakeCheckbox(parent, label, tooltip, getter, setter, yOffset)
@@ -40,14 +56,21 @@ local function MakeCheckbox(parent, label, tooltip, getter, setter, yOffset)
     return cb
 end
 
-local function MakeLabel(parent, text, x, y)
+local function MakeLabel(parent, text, x, y, tooltip)
     local fs = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     fs:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     fs:SetText(text)
+    if tooltip then
+        local hover = CreateFrame("Frame", nil, parent)
+        hover:SetPoint("TOPLEFT", fs, "TOPLEFT", -2, 2)
+        hover:SetPoint("BOTTOMRIGHT", fs, "BOTTOMRIGHT", 2, -2)
+        hover:EnableMouse(true)
+        ApplyTooltip(hover, text, tooltip)
+    end
     return fs
 end
 
-local function MakeEditBox(parent, width, getter, setter, yOffset, xOffset)
+local function MakeEditBox(parent, width, getter, setter, yOffset, xOffset, tooltipLabel, tooltipText)
     local eb = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
     eb:SetAutoFocus(false)
     eb:SetSize(width, 22)
@@ -61,6 +84,10 @@ local function MakeEditBox(parent, width, getter, setter, yOffset, xOffset)
     eb:SetScript("OnEnterPressed", commit)
     eb:SetScript("OnEscapePressed", function(self) self:SetText(getter() or "") self:ClearFocus() end)
     eb:SetScript("OnEditFocusLost", function(self) setter(self:GetText() or "") end)
+    eb.Refresh = function(self) self:SetText(getter() or "") end
+    if tooltipText then
+        ApplyTooltip(eb, tooltipLabel, tooltipText)
+    end
     return eb
 end
 
@@ -114,7 +141,7 @@ local function GetVoiceList()
     return list
 end
 
-local function MakeDropdown(parent, frameName, getter, setter, yOffset)
+local function MakeVoiceDropdown(parent, frameName, getter, setter, yOffset)
     local dd = CreateFrame("Frame", frameName, parent, "UIDropDownMenuTemplate")
     dd:SetPoint("TOPLEFT", parent, "TOPLEFT", 12, yOffset)
     UIDropDownMenu_SetWidth(dd, 260)
@@ -151,197 +178,188 @@ local function MakeDropdown(parent, frameName, getter, setter, yOffset)
     return dd
 end
 
-local function BuildPanel()
-    panel = CreateFrame("Frame", "LoadOutCallerOptionsPanel")
+local function NewSubPanel(name)
+    local f = CreateFrame("Frame")
+    f.name = name
+    f:Hide()
+    return f
+end
+
+local function AddPanelTitle(panel, text, subtitle)
+    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+    title:SetPoint("TOPLEFT", 16, -16)
+    title:SetText(text)
+    if subtitle then
+        local sub = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
+        sub:SetText(subtitle)
+        sub:SetTextColor(0.8, 0.8, 0.8)
+    end
+end
+
+local function BuildModePanel(modeKey, title, enterLabel, enterTip, opts)
+    opts = opts or {}
+    local panel = NewSubPanel(title)
+
+    AddPanelTitle(panel, title, enterTip)
+
+    local y = -64
+
+    MakeCheckbox(panel,
+        enterLabel,
+        enterTip,
+        function() return LoadOutCallerDB.modes[modeKey].announceOnEnter end,
+        function(v) LoadOutCallerDB.modes[modeKey].announceOnEnter = v end,
+        y)
+    y = y - 24
+
+    if not opts.omitReadyCheck then
+        MakeCheckbox(panel,
+            L["Announce on ready check"],
+            L["Triggers the announcement when a ready check is initiated."],
+            function() return LoadOutCallerDB.modes[modeKey].announceOnReadyCheck end,
+            function(v) LoadOutCallerDB.modes[modeKey].announceOnReadyCheck = v end,
+            y)
+        y = y - 24
+    end
+
+    if opts.showMatchStart then
+        MakeCheckbox(panel,
+            L["Announce on match start countdown"],
+            L["Triggers the announcement when the PvP match start countdown begins."],
+            function() return LoadOutCallerDB.modes[modeKey].announceOnMatchStartCountdown end,
+            function(v) LoadOutCallerDB.modes[modeKey].announceOnMatchStartCountdown = v end,
+            y)
+        y = y - 24
+    end
+
+    y = y - 8
+
+    MakeCheckbox(panel,
+        L["Always on enter (ignore skip keyword)"],
+        L["When active, always announce on enter, even if the build name contains the skip keyword."],
+        function() return LoadOutCallerDB.modes[modeKey].alwaysOnEnter end,
+        function(v) LoadOutCallerDB.modes[modeKey].alwaysOnEnter = v end,
+        y)
+    y = y - 24
+
+    if not opts.omitReadyCheck then
+        MakeCheckbox(panel,
+            L["Always on ready check (ignore skip keyword)"],
+            L["When active, always announce on ready check, even if the build name contains the skip keyword."],
+            function() return LoadOutCallerDB.modes[modeKey].alwaysOnReadyCheck end,
+            function(v) LoadOutCallerDB.modes[modeKey].alwaysOnReadyCheck = v end,
+            y)
+        y = y - 24
+    end
+
+    if opts.showMatchStart then
+        MakeCheckbox(panel,
+            L["Always on match start countdown (ignore skip keyword)"],
+            L["When active, always announce on the match start countdown, even if the build name contains the skip keyword."],
+            function() return LoadOutCallerDB.modes[modeKey].alwaysOnMatchStartCountdown end,
+            function(v) LoadOutCallerDB.modes[modeKey].alwaysOnMatchStartCountdown = v end,
+            y)
+        y = y - 24
+    end
+
+    y = y - 16
+
+    MakeLabel(panel, L["Skip keyword:"], 24, y, SKIP_KEYWORD_TOOLTIP)
+    y = y - 22
+
+    local eb = MakeEditBox(panel, 180,
+        function() return LoadOutCallerDB.modes[modeKey].skipKeyword end,
+        function(v) LoadOutCallerDB.modes[modeKey].skipKeyword = v end,
+        y, 32, L["Skip keyword:"], SKIP_KEYWORD_TOOLTIP)
+
+    MakeButton(panel, L["Reset to default"], 140,
+        function()
+            LoadOutCallerDB.modes[modeKey].skipKeyword = ns.defaults.modes[modeKey].skipKeyword
+            if eb.Refresh then eb:Refresh() end
+        end,
+        "TOPLEFT", panel, "TOPLEFT", 224, y)
+
+    local hint = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    hint:SetPoint("TOPLEFT", 24, y - 32)
+    hint:SetWidth(500)
+    hint:SetJustifyH("LEFT")
+    hint:SetText(SKIP_KEYWORD_TOOLTIP)
+    hint:SetTextColor(0.7, 0.7, 0.7)
+
+    return panel
+end
+
+local function BuildRootPanel()
+    local panel = CreateFrame("Frame", "LoadOutCallerOptionsPanel")
     panel.name = "LoadOutCaller"
 
-    local scroll = CreateFrame("ScrollFrame", "LoadOutCallerOptionsScroll", panel, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 4, -4)
-    scroll:SetPoint("BOTTOMRIGHT", -28, 4)
+    AddPanelTitle(panel, "LoadOutCaller", L["Announces your active talent build on instance enter and ready check."])
 
-    local content = CreateFrame("Frame", "LoadOutCallerOptionsContent", scroll)
-    content:SetSize(560, 1860)
-    scroll:SetScrollChild(content)
-
-    local title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("LoadOutCaller")
-
-    local subtitle = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
-    subtitle:SetText(L["Announces your active talent build on instance enter and ready check."])
-    subtitle:SetTextColor(0.8, 0.8, 0.8)
-
-    widgets.enabled = MakeCheckbox(content,
+    widgets.enabled = MakeCheckbox(panel,
         L["Addon enabled"],
         L["Master switch. When disabled, nothing happens."],
         function() return LoadOutCallerDB.enabled end,
         function(v) LoadOutCallerDB.enabled = v end,
         -64)
 
-    local function BuildModeSection(modeKey, title, enterLabel, enterTip, startY, opts)
-        opts = opts or {}
-        local showReadyCheck = not opts.omitReadyCheck
-        local showMatchStart = opts.showMatchStart
+    MakeSectionHeader(panel, L["Spec & Role"], -100)
 
-        MakeSectionHeader(content, title, content, startY)
-
-        MakeCheckbox(content,
-            enterLabel,
-            enterTip,
-            function() return LoadOutCallerDB.modes[modeKey].announceOnEnter end,
-            function(v) LoadOutCallerDB.modes[modeKey].announceOnEnter = v end,
-            startY - 22)
-
-        local y = startY - 22
-        if showReadyCheck then
-            MakeCheckbox(content,
-                L["Announce on ready check"],
-                L["Triggers the announcement when a ready check is initiated."],
-                function() return LoadOutCallerDB.modes[modeKey].announceOnReadyCheck end,
-                function(v) LoadOutCallerDB.modes[modeKey].announceOnReadyCheck = v end,
-                y - 24)
-            y = y - 24
-        end
-        if showMatchStart then
-            MakeCheckbox(content,
-                L["Announce on match start countdown"],
-                L["Triggers the announcement when the PvP match start countdown begins."],
-                function() return LoadOutCallerDB.modes[modeKey].announceOnMatchStartCountdown end,
-                function(v) LoadOutCallerDB.modes[modeKey].announceOnMatchStartCountdown = v end,
-                y - 24)
-            y = y - 24
-        end
-
-        MakeCheckbox(content,
-            L["Always on enter (ignore skip keyword)"],
-            L["When active, always announce on enter, even if the build name contains the skip keyword."],
-            function() return LoadOutCallerDB.modes[modeKey].alwaysOnEnter end,
-            function(v) LoadOutCallerDB.modes[modeKey].alwaysOnEnter = v end,
-            y - 24)
-        y = y - 24
-
-        if showReadyCheck then
-            MakeCheckbox(content,
-                L["Always on ready check (ignore skip keyword)"],
-                L["When active, always announce on ready check, even if the build name contains the skip keyword."],
-                function() return LoadOutCallerDB.modes[modeKey].alwaysOnReadyCheck end,
-                function(v) LoadOutCallerDB.modes[modeKey].alwaysOnReadyCheck = v end,
-                y - 24)
-            y = y - 24
-        end
-        if showMatchStart then
-            MakeCheckbox(content,
-                L["Always on match start countdown (ignore skip keyword)"],
-                L["When active, always announce on the match start countdown, even if the build name contains the skip keyword."],
-                function() return LoadOutCallerDB.modes[modeKey].alwaysOnMatchStartCountdown end,
-                function(v) LoadOutCallerDB.modes[modeKey].alwaysOnMatchStartCountdown = v end,
-                y - 24)
-            y = y - 24
-        end
-
-        MakeLabel(content, L["Skip keyword:"], 24, y - 26)
-        MakeEditBox(content, 180,
-            function() return LoadOutCallerDB.modes[modeKey].skipKeyword end,
-            function(v) LoadOutCallerDB.modes[modeKey].skipKeyword = v end,
-            y - 46, 32)
-    end
-
-    BuildModeSection("dungeon",
-        L["Mythic+ / Dungeons"],
-        L["Announce on entering a dungeon"],
-        L["Triggers the announcement when you enter a Mythic+ or 5-man dungeon."],
-        -100)
-
-    BuildModeSection("raid",
-        L["Raids"],
-        L["Announce on entering a raid"],
-        L["Triggers the announcement when you enter a raid instance."],
-        -270)
-
-    BuildModeSection("delve",
-        L["Delves"],
-        L["Announce on entering a delve"],
-        L["Triggers the announcement when you enter a delve."],
-        -440)
-
-    BuildModeSection("arena2v2",
-        L["Arena 2v2"],
-        L["Announce on entering Arena 2v2"],
-        L["Triggers the announcement when you enter a 2v2 arena match (ranked or skirmish)."],
-        -610, { omitReadyCheck = true, showMatchStart = true })
-
-    BuildModeSection("arena3v3",
-        L["Arena 3v3"],
-        L["Announce on entering Arena 3v3"],
-        L["Triggers the announcement when you enter a 3v3 arena match (ranked, skirmish, or Solo Shuffle)."],
-        -780, { omitReadyCheck = true, showMatchStart = true })
-
-    BuildModeSection("battleground",
-        L["Battlegrounds"],
-        L["Announce on entering a battleground"],
-        L["Triggers the announcement when you enter a battleground (including Epic BGs and rated)."],
-        -950, { omitReadyCheck = true, showMatchStart = true })
-
-    local skipHint = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    skipHint:SetPoint("TOPLEFT", 24, -1110)
-    skipHint:SetWidth(500)
-    skipHint:SetJustifyH("LEFT")
-    skipHint:SetText(L["Skip keyword: if your active loadout name contains this word (case-insensitive), the announcement is skipped for that mode."])
-    skipHint:SetTextColor(0.7, 0.7, 0.7)
-
-    MakeSectionHeader(content, L["Spec & Role"], content, -1154)
-
-    widgets.warnOnRoleMismatch = MakeCheckbox(content,
+    widgets.warnOnRoleMismatch = MakeCheckbox(panel,
         L["Warn on role mismatch"],
         L["Warns via the configured outputs (banner/chat/TTS) when your assigned group role doesn't match your current spec's natural role."],
         function() return LoadOutCallerDB.warnOnRoleMismatch end,
         function(v) LoadOutCallerDB.warnOnRoleMismatch = v end,
-        -1176)
+        -124)
 
-    widgets.announceOnSpecChange = MakeCheckbox(content,
+    widgets.announceOnSpecChange = MakeCheckbox(panel,
         L["Announce loadout on spec change"],
         L["Fires the build announcement when you switch talent specialization (same output as ready check / instance enter)."],
         function() return LoadOutCallerDB.announceOnSpecChange end,
         function(v) LoadOutCallerDB.announceOnSpecChange = v end,
-        -1200)
+        -148)
 
-    MakeSectionHeader(content, L["Display"], content, -1244)
+    return panel
+end
 
-    widgets.showText = MakeCheckbox(content,
+local function BuildDisplayPanel()
+    local panel = NewSubPanel(L["Display & Frame"])
+    AddPanelTitle(panel, L["Display & Frame"])
+
+    widgets.showText = MakeCheckbox(panel,
         L["Show on-screen text"],
         L["Displays the build name as large text on screen (~5s fade)."],
         function() return LoadOutCallerDB.showText end,
         function(v) LoadOutCallerDB.showText = v end,
-        -1266)
+        -64)
 
-    widgets.useChatMessage = MakeCheckbox(content,
+    widgets.useChatMessage = MakeCheckbox(panel,
         L["Post to chat"],
         L["Prints the announcement to your chat window (visible only to you)."],
         function() return LoadOutCallerDB.useChatMessage end,
         function(v) LoadOutCallerDB.useChatMessage = v end,
-        -1290)
+        -88)
 
-    widgets.bannerDuration = MakeSlider(content, "LoadOutCallerDurationSlider",
+    widgets.bannerDuration = MakeSlider(panel, "LoadOutCallerDurationSlider",
         L["Banner duration (seconds)"], 1, 15, 1,
         function() return LoadOutCallerDB.bannerDuration end,
         function(v) LoadOutCallerDB.bannerDuration = v end,
-        -1326)
+        -128)
 
-    widgets.bannerFontSize = MakeSlider(content, "LoadOutCallerFontSizeSlider",
+    widgets.bannerFontSize = MakeSlider(panel, "LoadOutCallerFontSizeSlider",
         L["Banner font size"], 12, 64, 2,
         function() return LoadOutCallerDB.bannerFontSize end,
         function(v) LoadOutCallerDB.bannerFontSize = v end,
-        -1362)
+        -168)
 
-    local editHint = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    editHint:SetPoint("TOPLEFT", 24, -1398)
+    local editHint = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    editHint:SetPoint("TOPLEFT", 24, -208)
     editHint:SetWidth(500)
     editHint:SetJustifyH("LEFT")
     editHint:SetText(L["Move display frame: switch to Edit Mode (Esc -> Edit Mode). The frame will appear automatically and can be placed with the mouse."])
     editHint:SetTextColor(0.8, 0.8, 0.8)
 
-    widgets.editModeButton = MakeButton(content,
+    widgets.editModeButton = MakeButton(panel,
         L["Open Edit Mode"],
         200,
         function()
@@ -354,50 +372,55 @@ local function BuildPanel()
                 EditModeManagerFrame:Show()
             end
         end,
-        "TOPLEFT", content, "TOPLEFT", 24, -1432)
+        "TOPLEFT", panel, "TOPLEFT", 24, -244)
 
-    MakeSectionHeader(content, L["Sound alert"], content, -1474)
+    return panel
+end
 
-    widgets.soundEnabled = MakeCheckbox(content,
+local function GetSoundList()
+    local list = {}
+    local presets = ns.PRESET_SOUNDS or {}
+    for _, p in ipairs(presets) do
+        table.insert(list, { key = p.key, label = p.label, id = p.id })
+    end
+    if ns.GetSharedMediaSounds then
+        local lsm = ns.GetSharedMediaSounds()
+        for _, s in ipairs(lsm) do
+            table.insert(list, s)
+        end
+    end
+    return list
+end
+
+local function SoundGetter()
+    return LoadOutCallerDB.soundPath or LoadOutCallerDB.soundID or 0
+end
+
+local function SoundSetter(entry)
+    if entry.path then
+        LoadOutCallerDB.soundPath = entry.path
+        LoadOutCallerDB.soundID = nil
+    else
+        LoadOutCallerDB.soundPath = nil
+        LoadOutCallerDB.soundID = entry.id
+    end
+end
+
+local function BuildSoundPanel()
+    local panel = NewSubPanel(L["Sound"])
+    AddPanelTitle(panel, L["Sound"])
+
+    widgets.soundEnabled = MakeCheckbox(panel,
         L["Play a sound on announcement"],
         L["Plays a sound via Blizzard's sound system. Works independently of TTS."],
         function() return LoadOutCallerDB.soundEnabled end,
         function(v) LoadOutCallerDB.soundEnabled = v end,
-        -1496)
+        -64)
 
-    MakeLabel(content, L["Alert sound:"], 24, -1524)
+    MakeLabel(panel, L["Alert sound:"], 24, -96)
 
-    local function GetSoundList()
-        local list = {}
-        local presets = ns.PRESET_SOUNDS or {}
-        for _, p in ipairs(presets) do
-            table.insert(list, { key = p.key, label = p.label, id = p.id })
-        end
-        if ns.GetSharedMediaSounds then
-            local lsm = ns.GetSharedMediaSounds()
-            for _, s in ipairs(lsm) do
-                table.insert(list, s)
-            end
-        end
-        return list
-    end
-
-    local function SoundGetter()
-        return LoadOutCallerDB.soundPath or LoadOutCallerDB.soundID or 0
-    end
-
-    local function SoundSetter(entry)
-        if entry.path then
-            LoadOutCallerDB.soundPath = entry.path
-            LoadOutCallerDB.soundID = nil
-        else
-            LoadOutCallerDB.soundPath = nil
-            LoadOutCallerDB.soundID = entry.id
-        end
-    end
-
-    local soundDD = CreateFrame("Frame", "LoadOutCallerSoundDropdown", content, "UIDropDownMenuTemplate")
-    soundDD:SetPoint("TOPLEFT", content, "TOPLEFT", 12, -1542)
+    local soundDD = CreateFrame("Frame", "LoadOutCallerSoundDropdown", panel, "UIDropDownMenuTemplate")
+    soundDD:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -114)
     UIDropDownMenu_SetWidth(soundDD, 260)
 
     local function SoundDDRefresh()
@@ -431,7 +454,7 @@ local function BuildPanel()
     soundDD:SetScript("OnShow", SoundDDRefresh)
     widgets.soundDropdown = soundDD
 
-    widgets.testSoundButton = MakeButton(content,
+    widgets.testSoundButton = MakeButton(panel,
         L["Test sound"],
         120,
         function()
@@ -442,59 +465,140 @@ local function BuildPanel()
                 LoadOutCallerDB.soundEnabled = wasEnabled
             end
         end,
-        "TOPLEFT", content, "TOPLEFT", 300, -1546)
+        "TOPLEFT", panel, "TOPLEFT", 300, -118)
 
-    MakeSectionHeader(content, L["Text-to-Speech (TTS)"], content, -1586)
+    return panel
+end
 
-    widgets.useTTS = MakeCheckbox(content,
+local function BuildTTSPanel()
+    local panel = NewSubPanel(L["Text-to-Speech (TTS)"])
+    AddPanelTitle(panel, L["Text-to-Speech (TTS)"])
+
+    widgets.useTTS = MakeCheckbox(panel,
         L["Use TTS"],
         L["Speaks the build name via WoW's built-in TTS."],
         function() return LoadOutCallerDB.useTTS end,
         function(v) LoadOutCallerDB.useTTS = v end,
-        -1608)
+        -64)
 
-    MakeLabel(content, L["TTS text template (placeholder: {build}):"], 24, -1636)
-    widgets.ttsTemplate = MakeEditBox(content, 480,
+    MakeLabel(panel, L["TTS text template (placeholder: {loadoutname}):"], 24, -96)
+    widgets.ttsTemplate = MakeEditBox(panel, 480,
         function() return LoadOutCallerDB.ttsTemplate end,
         function(v) LoadOutCallerDB.ttsTemplate = v end,
-        -1656, 32)
+        -116, 32)
 
-    MakeLabel(content, L["TTS voice:"], 24, -1688)
-    widgets.ttsVoice = MakeDropdown(content, "LoadOutCallerVoiceDropdown",
+    MakeButton(panel, L["Reset to default"], 140,
+        function()
+            LoadOutCallerDB.ttsTemplate = ns.defaults.ttsTemplate
+            if widgets.ttsTemplate and widgets.ttsTemplate.Refresh then
+                widgets.ttsTemplate:Refresh()
+            end
+        end,
+        "TOPLEFT", panel, "TOPLEFT", 524, -116)
+
+    MakeLabel(panel, L["TTS voice:"], 24, -148)
+    widgets.ttsVoice = MakeVoiceDropdown(panel, "LoadOutCallerVoiceDropdown",
         function() return LoadOutCallerDB.ttsVoiceID or 0 end,
         function(v) LoadOutCallerDB.ttsVoiceID = v end,
-        -1706)
+        -166)
 
-    widgets.ttsVolume = MakeSlider(content, "LoadOutCallerVolumeSlider",
+    widgets.ttsVolume = MakeSlider(panel, "LoadOutCallerVolumeSlider",
         L["Volume"], 0, 100, 5,
         function() return LoadOutCallerDB.ttsVolume end,
         function(v) LoadOutCallerDB.ttsVolume = v end,
-        -1746)
+        -210)
 
-    widgets.ttsRate = MakeSlider(content, "LoadOutCallerRateSlider",
+    widgets.ttsRate = MakeSlider(panel, "LoadOutCallerRateSlider",
         L["Speed"], -10, 10, 1,
         function() return LoadOutCallerDB.ttsRate end,
         function(v) LoadOutCallerDB.ttsRate = v end,
-        -1782)
+        -250)
 
-    widgets.testButton = MakeButton(content,
+    widgets.testButton = MakeButton(panel,
         L["Test announcement"],
-        140,
+        200,
         function()
-            if ns.Announce then ns.Announce("test") end
+            if ns.TestTTS then
+                ns.TestTTS()
+            elseif ns.Announce then
+                ns.Announce("test")
+            end
         end,
-        "TOPLEFT", content, "TOPLEFT", 24, -1822)
+        "TOPLEFT", panel, "TOPLEFT", 24, -294)
+
+    return panel
+end
+
+local MODE_PANEL_DEFS = {
+    {
+        modeKey = "dungeon",
+        title = L["Mythic+ / Dungeons"],
+        enterLabel = L["Announce on entering a dungeon"],
+        enterTip = L["Triggers the announcement when you enter a Mythic+ or 5-man dungeon."],
+        opts = nil,
+    },
+    {
+        modeKey = "raid",
+        title = L["Raids"],
+        enterLabel = L["Announce on entering a raid"],
+        enterTip = L["Triggers the announcement when you enter a raid instance."],
+        opts = nil,
+    },
+    {
+        modeKey = "delve",
+        title = L["Delves"],
+        enterLabel = L["Announce on entering a delve"],
+        enterTip = L["Triggers the announcement when you enter a delve."],
+        opts = nil,
+    },
+    {
+        modeKey = "arena2v2",
+        title = L["Arena 2v2"],
+        enterLabel = L["Announce on entering Arena 2v2"],
+        enterTip = L["Triggers the announcement when you enter a 2v2 arena match (ranked or skirmish)."],
+        opts = { omitReadyCheck = true, showMatchStart = true },
+    },
+    {
+        modeKey = "arena3v3",
+        title = L["Arena 3v3"],
+        enterLabel = L["Announce on entering Arena 3v3"],
+        enterTip = L["Triggers the announcement when you enter a 3v3 arena match (ranked, skirmish, or Solo Shuffle)."],
+        opts = { omitReadyCheck = true, showMatchStart = true },
+    },
+    {
+        modeKey = "battleground",
+        title = L["Battlegrounds"],
+        enterLabel = L["Announce on entering a battleground"],
+        enterTip = L["Triggers the announcement when you enter a battleground (including Epic BGs and rated)."],
+        opts = { omitReadyCheck = true, showMatchStart = true },
+    },
+}
+
+local function RegisterSubcategory(panel)
+    local sub = Settings.RegisterCanvasLayoutSubcategory(rootCategory, panel, panel.name)
+    return sub
 end
 
 function ns.InitOptions()
-    if panel then return end
-    BuildPanel()
-    category = Settings.RegisterCanvasLayoutCategory(panel, "LoadOutCaller")
-    Settings.RegisterAddOnCategory(category)
-    ns.optionsCategory = category
+    if rootCategory then return end
+
+    local rootPanel = BuildRootPanel()
+    rootCategory = Settings.RegisterCanvasLayoutCategory(rootPanel, "LoadOutCaller")
+    Settings.RegisterAddOnCategory(rootCategory)
+
+    for _, def in ipairs(MODE_PANEL_DEFS) do
+        local subPanel = BuildModePanel(def.modeKey, def.title, def.enterLabel, def.enterTip, def.opts)
+        RegisterSubcategory(subPanel)
+    end
+
+    RegisterSubcategory(BuildDisplayPanel())
+    RegisterSubcategory(BuildSoundPanel())
+    RegisterSubcategory(BuildTTSPanel())
+
+    ns.optionsCategory = rootCategory
 end
 
 function ns.OpenOptions()
-    if not category or not Settings or not Settings.OpenToCategory then return end
-    Settings.OpenToCategory(category:GetID())
+    if not rootCategory or not Settings or not Settings.OpenToCategory then return end
+    Settings.OpenToCategory(rootCategory:GetID())
 end

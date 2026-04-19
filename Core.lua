@@ -37,7 +37,7 @@ ns.defaults = {
             alwaysOnEnter = false,
             alwaysOnReadyCheck = false,
             alwaysOnMatchStartCountdown = false,
-            skipKeyword = "PvP",
+            skipKeyword = "2v2",
         },
         arena3v3 = {
             announceOnEnter = true,
@@ -46,7 +46,7 @@ ns.defaults = {
             alwaysOnEnter = false,
             alwaysOnReadyCheck = false,
             alwaysOnMatchStartCountdown = false,
-            skipKeyword = "PvP",
+            skipKeyword = "3v3",
         },
         battleground = {
             announceOnEnter = true,
@@ -55,7 +55,7 @@ ns.defaults = {
             alwaysOnEnter = false,
             alwaysOnReadyCheck = false,
             alwaysOnMatchStartCountdown = false,
-            skipKeyword = "PvP",
+            skipKeyword = "BG",
         },
     },
     showText = true,
@@ -63,7 +63,7 @@ ns.defaults = {
     useTTS = true,
     warnOnRoleMismatch = true,
     announceOnSpecChange = true,
-    ttsTemplate = L["Current build: {build}"],
+    ttsTemplate = L["Current loadout: {loadoutname}"],
     ttsVoiceID = 0,
     ttsVolume = 100,
     ttsRate = 0,
@@ -325,23 +325,38 @@ local function PlayAlertSound()
 end
 ns.PlayAlertSound = PlayAlertSound
 
-local function SpeakTTS(text)
-    if not (C_VoiceChat and C_VoiceChat.SpeakText) then return end
+local function GetTtsDestination()
+    local e = Enum and Enum.VoiceTtsDestination
+    if e then
+        return e.QueuedLocalPlayback or e.LocalPlayback or 2
+    end
+    return 2
+end
+
+local function SpeakTTS(text, verbose)
+    if not (C_VoiceChat and C_VoiceChat.SpeakText) then
+        if verbose then
+            Print(L["TTS API not available (C_VoiceChat.SpeakText missing)."])
+        end
+        return false
+    end
     local voiceID = LoadOutCallerDB.ttsVoiceID or 0
     local rate = LoadOutCallerDB.ttsRate or 0
     local volume = LoadOutCallerDB.ttsVolume or 100
-    local dest = (Enum and Enum.VoiceTtsDestination and Enum.VoiceTtsDestination.LocalPlayback) or 1
-    local ok = pcall(C_VoiceChat.SpeakText, voiceID, text, dest, rate, volume)
-    if not ok then
-        pcall(C_VoiceChat.SpeakText, voiceID, text, rate, volume, false)
+    local dest = GetTtsDestination()
+
+    local ok, err = pcall(C_VoiceChat.SpeakText, voiceID, text, dest, rate, volume)
+    if not ok and verbose then
+        Print(L["TTS error: {details}"]:gsub("{details}", tostring(err)))
     end
+    return ok
 end
 ns.SpeakTTS = SpeakTTS
 
 local function FormatTemplate(template, buildName)
-    template = template or "{build}"
+    template = template or "{loadoutname}"
     local safe = (buildName or ""):gsub("%%", "%%%%")
-    local out = template:gsub("{build}", safe)
+    local out = template:gsub("{loadoutname}", safe)
     return out
 end
 
@@ -430,6 +445,13 @@ local function Announce(reason)
     EmitMessage(msg)
 end
 ns.Announce = Announce
+
+local function TestTTS()
+    local buildName = GetActiveBuildName()
+    local msg = FormatTemplate(LoadOutCallerDB.ttsTemplate, buildName)
+    return SpeakTTS(msg, true)
+end
+ns.TestTTS = TestTTS
 
 local lastRoleMismatchState
 local function HandleRoleChanged(changedName)
