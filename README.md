@@ -4,18 +4,40 @@
 
 LoadOutCaller announces your currently selected talent loadout the moment you enter a Mythic+ (M+) dungeon, a raid, a Delve, an arena, or a battleground - when a ready check starts, when the PvP match-start countdown begins, or when you switch specialization. It also warns you if your assigned group role doesn't match your spec. The loadout name is spoken out loud via WoW's built-in text-to-speech, written to chat, and shown as large text on your screen - so you notice *before* the pull that you're still on the wrong build.
 
+## How it works (read this first!)
+
+LoadOutCaller does **not** know which loadout is "right" for which content. It just compares two things:
+
+1. **The kind of instance you entered** (dungeon / raid / delve / arena 2v2 / arena 3v3 / battleground, plus optionally open world with War Mode on/off - determined by WoW's `instanceType`, group size, and War Mode state).
+2. **The name of your currently active loadout** (the one you picked in the talent UI).
+
+For each mode there is a **skip keyword**. The rule is dead simple:
+
+> If your active loadout's name *contains the skip keyword for this mode* (case-insensitive, substring match), **the announcement is silently skipped** - LoadOutCaller assumes you're on the correct build.
+>
+> Otherwise, **it warns you** - because you probably forgot to switch.
+
+So you have to line up the two sides yourself. Two equally valid ways:
+
+- **Name your loadouts to match the default keywords** (`M+`, `Raid`, `Delves`, `2v2`, `3v3`, `BG`, plus `Warmode` / `Open World` if you enable the open-world modes) - e.g. name your raid loadout `"Fury Raid"`, your M+ loadout `"Fury M+"`, your BG loadout `"Fury BG"`. The defaults then Just Work™.
+- **Or change the keywords to match your naming scheme** - if you call your raid loadout `"Fury Council"` and your M+ loadout `"Fury Trash"`, set the raid skip keyword to `Council` and the dungeon skip keyword to `Trash`.
+
+If you do neither, you will get warned every single time you enter instanced content, because no loadout name will ever match any keyword. That's a feature, not a bug - but people tend to blame the addon for "spamming" when they haven't aligned their loadout names with the keywords. **Align them once and you're done.**
+
 ## Features
 
-- **Six independent modes**: Mythic+ / Dungeons, Raids, Delves, Arena 2v2, Arena 3v3, and Battlegrounds - each with its own triggers and skip keyword. PvE modes (dungeon/raid/delve) support both instance-enter and ready-check triggers; PvP modes support instance-enter and **match-start countdown** (fires when the arena/BG gates-open countdown begins). Arena 3v3 covers rated, skirmish, **and** Solo Shuffle (all 6-player brackets); Arena 2v2 covers rated and skirmish.
+- **Eight independent modes**: Mythic+ / Dungeons, Raids, Delves, Arena 2v2, Arena 3v3, Battlegrounds, plus two **optional open-world modes** (War Mode on / off) - each with its own triggers and skip keyword. PvE modes (dungeon/raid/delve) support both instance-enter and ready-check triggers; PvP modes support instance-enter and **match-start countdown** (fires when the arena/BG gates-open countdown begins). Arena 3v3 covers rated, skirmish, **and** Solo Shuffle (all 6-player brackets); Arena 2v2 covers rated and skirmish.
+- **Optional open-world tracking** (off by default): separate modes for "open world with War Mode enabled" and "open world with War Mode disabled" let you announce your build when zoning into the world map - useful if you run a dedicated War Mode / PvP-flagged loadout vs. a questing / daily build and want a reminder before you get ganked with the wrong talents.
+- **Clean settings hierarchy**: each mode and output area has its own page under `Esc -> Options -> AddOns -> LoadOutCaller` in the sidebar, so you only see the controls relevant to what you're editing.
 - **Spec / role safety net**: warns when your assigned group role (Tank/Healer/Damage) doesn't match your current spec's natural role (e.g. signed up as Tank but currently in Frost DK). Also announces your loadout on spec switch, re-applying the skip-keyword logic.
 - **Four output channels**: on-screen banner, chat message, spoken TTS, and a short sound alert - each independently toggleable.
 - **Customizable banner**: configurable display duration (1-15s) and font size (12-64pt), repositionable via Blizzard's Edit Mode.
 - **Sound alerts**: curated Blizzard sound presets (Ready Check, Raid Warning, Alarm Clock, …). If [LibSharedMedia-3.0](https://www.curseforge.com/wow/addons/libsharedmedia-3-0) is installed, its sounds are offered too - but it's **not** a dependency.
-- **Smart skip**: if your active loadout already contains a keyword (e.g. `M+` in dungeons, `Raid` in raids, `Delves` in delves), the announcement is silently skipped for that mode. Keywords are fully configurable and case-insensitive.
+- **Smart skip**: if your active loadout already contains a keyword (e.g. `M+` in dungeons, `Raid` in raids, `2v2` in 2v2 arena), the announcement is silently skipped for that mode. Keywords are fully configurable and case-insensitive, and every mode has a one-click **Reset to default** button.
 - **Per-trigger "always announce"** flags per mode if you want the reminder unconditionally (e.g. on every raid ready check).
+- **Anti-duplicate cooldown**: multiple triggers firing within a few seconds (common on arena entry: enter + countdown) only produce one announcement.
 - **Draggable display frame** integrated with Blizzard's **Edit Mode** - no clunky lock/unlock commands needed, just Esc -> Edit Mode.
-- **Fully configurable TTS**: voice, volume, speed, and a custom message template with a `{build}` placeholder.
-- **In-game options panel** under Esc -> Options -> AddOns (no chat-command config).
+- **Fully configurable TTS**: voice, volume, speed, and a custom message template with a `{loadoutname}` placeholder.
 - **11 locales**: English, German, French, Spanish (ES+MX), Italian, Portuguese (BR), Russian, Korean, Simplified + Traditional Chinese.
 
 ## Installation
@@ -38,69 +60,64 @@ World of Warcraft\_retail_\Interface\AddOns\
 
 ### Slash commands
 
-| Command | Effect |
-|---|---|
-| `/lc` or `/loadoutcaller` | Open the options panel |
-| `/lc test` | Trigger a test announcement using your current loadout |
-| `/lc lock` / `/lc unlock` | Fallback to lock/unlock the display frame without Edit Mode |
-| `/lc help` | List commands |
+| Command                       | Effect                                                                 |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| `/lc` or `/loadoutcaller`     | Open the options panel                                                 |
+| `/lc test`                    | Trigger a test announcement using your current loadout                 |
+| `/lc lock` / `/lc unlock`     | Fallback to lock/unlock the display frame without Edit Mode            |
+| `/lc help`                    | List commands                                                          |
 
 ### Moving the on-screen banner
 
-Press **Esc -> Edit Mode**. The banner appears automatically, drag it wherever you want, exit Edit Mode - position is saved. (You can also open Edit Mode directly from the options panel with the *Open Edit Mode* button.)
+Press **Esc -> Edit Mode**. The banner appears automatically, drag it wherever you want, exit Edit Mode - position is saved. (You can also open Edit Mode directly from the *Display & Frame* subcategory with the *Open Edit Mode* button.)
 
 ### Options
 
-The panel lives at **Esc -> Options -> AddOns -> LoadOutCaller**. Settings:
+The panel lives at **Esc -> Options -> AddOns -> LoadOutCaller** and is organised as a sidebar tree:
 
-- **Addon enabled** - master switch.
-- **Per-mode sections** - six independent blocks:
-  - **PvE** (Mythic+ / Dungeons, Raids, Delves): *Announce on entering*, *Announce on ready check*, *Always on enter*, *Always on ready check*, *Skip keyword* (defaults `M+`, `Raid`, `Delves`).
-  - **PvP** (Arena 2v2, Arena 3v3, Battlegrounds): *Announce on entering*, *Announce on match start countdown*, *Always on enter*, *Always on match start countdown*, *Skip keyword* (default `PvP`).
-  - *Skip keyword* logic: if your active loadout name contains the keyword (case-insensitive), the announcement for that mode is skipped - unless the matching *Always on …* flag is set.
-- **Spec & Role**:
-  - *Warn on role mismatch* - compares `UnitGroupRolesAssigned("player")` with your spec's role; warns if they differ.
-  - *Announce loadout on spec change* - fires the full build announcement (plus role check) when you switch specialization.
-- **Show on-screen text** - toggle the banner.
-- **Banner duration / font size** - tune the banner's on-screen time and text size.
-- **Post to chat** - prints the announcement to your local chat window (visible only to you).
-- **Play a sound on announcement** - enables a short audio alert. Pick from Blizzard presets or LibSharedMedia sounds (if installed).
-- **Use TTS** - toggle voice output.
-- **TTS template** - custom message, `{build}` is replaced with your loadout name. Default: *"Current build: {build}"* (localized).
-- **TTS voice / volume / speed** - standard TTS parameters.
-- **Test announcement** - fires a manual announcement to preview your settings.
+- **LoadOutCaller** (main page) - master switch, role-mismatch warning, loadout-on-spec-change toggle.
+- **Mythic+ / Dungeons**, **Raids**, **Delves** - per-mode triggers: *Announce on entering*, *Announce on ready check*, *Always on enter*, *Always on ready check*, plus *Skip keyword* (defaults `M+`, `Raid`, `Delves`) with a **Reset** button and a hover-tooltip explaining how the skip works.
+- **Arena 2v2**, **Arena 3v3**, **Battlegrounds** - per-mode triggers: *Announce on entering*, *Announce on match start countdown*, *Always on enter*, *Always on match start countdown*, plus *Skip keyword* (defaults `2v2`, `3v3`, `BG`) with a **Reset** button.
+- **Open World (War Mode on)**, **Open World (War Mode off)** - **opt-in** (both off by default): fire the announcement when you zone into the open world with the respective War Mode state. Per-mode triggers: *Announce on entering*, *Always on enter*, plus *Skip keyword* (defaults `Warmode`, `Open World`) with a **Reset** button. Useful if you keep distinct loadouts for War Mode PvP vs. questing.
+- **Display & Frame** - on-screen text toggle, chat toggle, banner duration (1-15s), font size (12-64pt), Edit Mode button.
+- **Sound** - sound-on-announce toggle, alert sound dropdown (Blizzard presets + LibSharedMedia if installed), test button.
+- **Text-to-Speech** - *Use TTS*, template (with `{loadoutname}` placeholder; Reset button restores the default "Current loadout: {loadoutname}"), voice dropdown, volume, speed, test button.
 
-## How the per-mode skip keyword works
+Every Skip-keyword input has a tooltip on hover explaining the case-insensitive substring match.
 
-Example: you name your M+ loadout `"Fury M+"` and your raid loadouts `"Fury Council"`, `"Fury ST"`, etc.
+## Examples of the skip-keyword rule
 
-- **Mythic+ dungeon, `"Fury M+"` active** -> *silent* (name contains `M+`, clearly the right build).
-- **Mythic+ dungeon, `"Fury Council"` active** -> *announced* (name doesn't contain `M+`, so you probably forgot to switch).
+You name your M+ loadout `"Fury M+"` and your raid loadouts per-boss (`"Fury Council"`, `"Fury ST"`, …).
+
+- **Mythic+ dungeon, `"Fury M+"` active** → *silent* (name contains `M+`, clearly the right build).
+- **Mythic+ dungeon, `"Fury Council"` active** → *announced* (name doesn't contain `M+`, so you probably forgot to switch).
 - **Raid boss ready check, loadout = `"Fury Council"` for that fight**:
-  - With *Always on ready check* **off**: *silent* (name doesn't contain `Raid`, but maybe that's fine - you still won't get a nudge).
-  - With *Always on ready check* **on**: *announced every time* (recommended if you use a per-boss loadout naming scheme, so you hear the loadout name before every pull regardless of skip keyword).
+  - With *Always on ready check* **off**: *silent* (name doesn't contain `Raid`, but you still won't get a nudge - probably fine, you just swapped).
+  - With *Always on ready check* **on**: *announced every time* (recommended if you use a per-boss naming scheme, so you hear the loadout name before every pull regardless of skip keyword).
+- **Arena 2v2, loadout = `"Fury 2v2"`** → *silent* (contains `2v2`). Loadout = `"Fury M+"` → *announced*.
+- **Open World with War Mode on** (opt-in, loadout = `"Fury Warmode PvP"`) → *silent* (contains `Warmode`). Loadout = `"Fury M+"` → *announced* (you'd get ganked with the wrong build).
 
-Use per-mode `Always on …` toggles to customize the behavior per context.
+The per-mode `Always on …` toggles let you force announcements regardless of the skip keyword - useful for raid ready-checks where you actually *want* to hear the build name every pull.
 
 ## Requirements
 
 - World of Warcraft Retail, The War Within / Midnight (Interface `120001`).
-- TTS works out of the box using Blizzard's built-in voice engine; no external dependencies.
+- TTS works out of the box using Blizzard's built-in voice engine; no external dependencies. Requires at least one Windows TTS voice installed (check `Time & Language -> Speech` in Windows).
 
 ## Languages
 
-| Locale | Status |
-|---|---|
-| enUS / enGB | base |
-| deDE | native |
-| frFR | translated |
+| Locale      | Status     |
+| ----------- | ---------- |
+| enUS / enGB | base       |
+| deDE        | native     |
+| frFR        | translated |
 | esES / esMX | translated |
-| itIT | translated |
-| ptBR | translated |
-| ruRU | translated |
-| koKR | translated |
-| zhCN | translated |
-| zhTW | translated |
+| itIT        | translated |
+| ptBR        | translated |
+| ruRU        | translated |
+| koKR        | translated |
+| zhCN        | translated |
+| zhTW        | translated |
 
 Translations for non-English locales were done with reasonable care but have not been reviewed by native speakers for every language. Native-speaker corrections welcome - strings live in `Locales/<locale>.lua`, keyed by their English original.
 
@@ -111,4 +128,3 @@ MIT
 ## Credits
 
 Author: Comag-Malfurion (Have Fun)
- 

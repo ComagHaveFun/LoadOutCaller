@@ -4,7 +4,7 @@ ns.ADDON_NAME = ADDON_NAME
 ns.L = ns.L or setmetatable({}, { __index = function(t, k) return k end })
 local L = ns.L
 
-ns.MODE_ORDER = { "dungeon", "raid", "delve", "arena2v2", "arena3v3", "battleground" }
+ns.MODE_ORDER = { "dungeon", "raid", "delve", "arena2v2", "arena3v3", "battleground", "openworld_warmode", "openworld_nowarmode" }
 
 ns.defaults = {
     enabled = true,
@@ -56,6 +56,16 @@ ns.defaults = {
             alwaysOnReadyCheck = false,
             alwaysOnMatchStartCountdown = false,
             skipKeyword = "BG",
+        },
+        openworld_warmode = {
+            announceOnEnter = false,
+            alwaysOnEnter = false,
+            skipKeyword = "Warmode",
+        },
+        openworld_nowarmode = {
+            announceOnEnter = false,
+            alwaysOnEnter = false,
+            skipKeyword = "Open World",
         },
     },
     showText = true,
@@ -124,11 +134,24 @@ local INSTANCE_TYPE_TO_MODE = {
     pvp      = "battleground",
 }
 
+local function IsWarMode()
+    if C_PvP and C_PvP.IsWarModeDesired then
+        local ok, v = pcall(C_PvP.IsWarModeDesired)
+        if ok then return v and true or false end
+    end
+    return false
+end
+
 local function GetModeKey(instanceType, maxPlayers)
     if instanceType == "arena" then
         return maxPlayers == 4 and "arena2v2" or "arena3v3"
     end
-    return INSTANCE_TYPE_TO_MODE[instanceType]
+    local mapped = INSTANCE_TYPE_TO_MODE[instanceType]
+    if mapped then return mapped end
+    if instanceType == "none" then
+        return IsWarMode() and "openworld_warmode" or "openworld_nowarmode"
+    end
+    return nil
 end
 ns.GetModeKey = GetModeKey
 
@@ -150,7 +173,7 @@ end
 
 local function GetActiveBuildName()
     if not C_ClassTalents then
-        return L["No active build"]
+        return L["No active build"], false
     end
 
     local specID
@@ -167,14 +190,16 @@ local function GetActiveBuildName()
 
     if specID and C_ClassTalents.GetLastSelectedSavedConfigID then
         local savedID = C_ClassTalents.GetLastSelectedSavedConfigID(specID)
-        local name = GetConfigName(savedID)
-        if name then return name end
+        if savedID and savedID ~= 0 then
+            local name = GetConfigName(savedID)
+            if name then return name, true end
+        end
     end
     if C_ClassTalents.GetActiveConfigID then
         local name = GetConfigName(C_ClassTalents.GetActiveConfigID())
-        if name then return name .. L[" (default)"] end
+        if name then return name .. L[" (default)"], false end
     end
-    return L["No active build"]
+    return L["No active build"], false
 end
 ns.GetActiveBuildName = GetActiveBuildName
 
@@ -325,14 +350,6 @@ local function PlayAlertSound()
 end
 ns.PlayAlertSound = PlayAlertSound
 
-local function GetTtsDestination()
-    local e = Enum and Enum.VoiceTtsDestination
-    if e then
-        return e.QueuedLocalPlayback or e.LocalPlayback or 2
-    end
-    return 2
-end
-
 local function SpeakTTS(text, verbose)
     if not (C_VoiceChat and C_VoiceChat.SpeakText) then
         if verbose then
@@ -343,9 +360,9 @@ local function SpeakTTS(text, verbose)
     local voiceID = LoadOutCallerDB.ttsVoiceID or 0
     local rate = LoadOutCallerDB.ttsRate or 0
     local volume = LoadOutCallerDB.ttsVolume or 100
-    local dest = GetTtsDestination()
 
-    local ok, err = pcall(C_VoiceChat.SpeakText, voiceID, text, dest, rate, volume)
+    -- Patch 12.0.0: signature is (voiceID, text, rate, volume, overlap)
+    local ok, err = pcall(C_VoiceChat.SpeakText, voiceID, text, rate, volume, false)
     if not ok and verbose then
         Print(L["TTS error: {details}"]:gsub("{details}", tostring(err)))
     end
@@ -402,8 +419,8 @@ local function EmitMessage(msg)
     if not msg or msg == "" then return end
     if LoadOutCallerDB.showText then ShowAnnouncement(msg) end
     if LoadOutCallerDB.useChatMessage then Print(msg) end
-    PlayAlertSound()
     if LoadOutCallerDB.useTTS then SpeakTTS(msg) end
+    PlayAlertSound()
 end
 ns.EmitMessage = EmitMessage
 
@@ -413,8 +430,21 @@ local FORCE_FLAGS = {
     matchstart = "alwaysOnMatchStartCountdown",
 }
 
+local INSTANCE_REASONS = {
+    enter      = true,
+    readycheck = true,
+    matchstart = true,
+}
+
 local function ShouldSkip(reason, mode, buildName)
-    if reason == "test" or not mode then return false end
+    if reason == "test" then return false end
+    -- Instance-triggered announcements only apply inside a tracked mode.
+    -- If we scheduled an announce but the player has already left the BG/arena/dungeon
+    -- by the time it fires, mode is nil and we must skip.
+    if not mode then
+        return INSTANCE_REASONS[reason] == true
+    end
+
     local keyword = mode.skipKeyword
     if not keyword or keyword == "" then return false end
 
@@ -424,13 +454,34 @@ local function ShouldSkip(reason, mode, buildName)
     return buildName:lower():find(keyword:lower(), 1, true) ~= nil
 end
 
-local function Announce(reason)
+local ANNOUNCE_COOLDOWN = 5
+local BUILD_NAME_MAX_RETRIES = 3
+local BUILD_NAME_RETRY_DELAY = 2
+local lastAnnounceTime = 0
+
+local function Announce(reason, retryCount)
     if not LoadOutCallerDB.enabled and reason ~= "test" then return end
+
+    if reason ~= "test" then
+        local now = GetTime()
+        if now - lastAnnounceTime < ANNOUNCE_COOLDOWN then return end
+    end
+
+    local buildName, isSaved = GetActiveBuildName()
+
+    -- After /reload the talent API can briefly return the default-spec build
+    -- before GetLastSelectedSavedConfigID is populated. Retry a few times.
+    if not isSaved and reason ~= "test" then
+        retryCount = retryCount or 0
+        if retryCount < BUILD_NAME_MAX_RETRIES then
+            C_Timer.After(BUILD_NAME_RETRY_DELAY, function() Announce(reason, retryCount + 1) end)
+            return
+        end
+    end
+
     local _, instanceType, _, _, maxPlayers = GetInstanceInfo()
     local modeKey = GetModeKey(instanceType, maxPlayers)
     local mode = modeKey and LoadOutCallerDB.modes and LoadOutCallerDB.modes[modeKey] or nil
-
-    local buildName = GetActiveBuildName()
 
     if ShouldSkip(reason, mode, buildName) then
         return
@@ -442,6 +493,9 @@ local function Announce(reason)
         msg = msg .. ". " .. roleWarn
     end
 
+    if reason ~= "test" then
+        lastAnnounceTime = GetTime()
+    end
     EmitMessage(msg)
 end
 ns.Announce = Announce
@@ -501,15 +555,17 @@ local function HandleEnteringWorld(isInitialLogin, isReloadingUi)
         lastAnnouncedInstanceID = nil
         return
     end
+
+    -- Always update the last-seen instance ID, even when the mode's
+    -- announceOnEnter is off. Otherwise the ID stays stuck on the previous
+    -- instance and re-entering it triggers the dedup wrongly.
+    local isSameInstance = (lastAnnouncedInstanceID == instanceID)
+    lastAnnouncedInstanceID = instanceID
+
     local mode = LoadOutCallerDB.modes and LoadOutCallerDB.modes[modeKey]
     if not mode or not mode.announceOnEnter then return end
-    if isReloadingUi and lastAnnouncedInstanceID == instanceID then
-        return
-    end
-    if lastAnnouncedInstanceID == instanceID then
-        return
-    end
-    lastAnnouncedInstanceID = instanceID
+    if isSameInstance then return end
+
     C_Timer.After(0.5, function() Announce("enter") end)
 end
 

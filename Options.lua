@@ -572,6 +572,20 @@ local MODE_PANEL_DEFS = {
         enterTip = L["Triggers the announcement when you enter a battleground (including Epic BGs and rated)."],
         opts = { omitReadyCheck = true, showMatchStart = true },
     },
+    {
+        modeKey = "openworld_warmode",
+        title = L["Open World (War Mode on)"],
+        enterLabel = L["Announce on entering open world"],
+        enterTip = L["Triggers the announcement when you zone into the open world with War Mode enabled. Off by default - enable it if you use a dedicated War Mode build."],
+        opts = { omitReadyCheck = true },
+    },
+    {
+        modeKey = "openworld_nowarmode",
+        title = L["Open World (War Mode off)"],
+        enterLabel = L["Announce on entering open world"],
+        enterTip = L["Triggers the announcement when you zone into the open world with War Mode disabled (questing, dailies, world content). Off by default."],
+        opts = { omitReadyCheck = true },
+    },
 }
 
 local function RegisterSubcategory(panel)
