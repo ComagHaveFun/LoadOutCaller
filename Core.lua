@@ -12,15 +12,19 @@ ns.defaults = {
         dungeon = {
             announceOnEnter = true,
             announceOnReadyCheck = true,
+            announceOnInvite = true,
             alwaysOnEnter = false,
             alwaysOnReadyCheck = false,
+            alwaysOnInvite = false,
             skipKeyword = "M+",
         },
         raid = {
             announceOnEnter = true,
             announceOnReadyCheck = true,
+            announceOnInvite = true,
             alwaysOnEnter = false,
             alwaysOnReadyCheck = false,
+            alwaysOnInvite = false,
             skipKeyword = "Raid",
         },
         delve = {
@@ -34,27 +38,33 @@ ns.defaults = {
             announceOnEnter = true,
             announceOnReadyCheck = false,
             announceOnMatchStartCountdown = true,
+            announceOnInvite = true,
             alwaysOnEnter = false,
             alwaysOnReadyCheck = false,
             alwaysOnMatchStartCountdown = false,
+            alwaysOnInvite = false,
             skipKeyword = "2v2",
         },
         arena3v3 = {
             announceOnEnter = true,
             announceOnReadyCheck = false,
             announceOnMatchStartCountdown = true,
+            announceOnInvite = true,
             alwaysOnEnter = false,
             alwaysOnReadyCheck = false,
             alwaysOnMatchStartCountdown = false,
+            alwaysOnInvite = false,
             skipKeyword = "3v3",
         },
         battleground = {
             announceOnEnter = true,
             announceOnReadyCheck = false,
             announceOnMatchStartCountdown = true,
+            announceOnInvite = true,
             alwaysOnEnter = false,
             alwaysOnReadyCheck = false,
             alwaysOnMatchStartCountdown = false,
+            alwaysOnInvite = false,
             skipKeyword = "BG",
         },
         openworld_warmode = {
@@ -79,11 +89,14 @@ ns.defaults = {
     ttsRate = 0,
     bannerDuration = 5,
     bannerFontSize = 32,
+    bannerColor = { r = 1, g = 0.82, b = 0 },
+    chatColor = { r = 1, g = 0.82, b = 0 },
     framePos = { point = "TOP", x = 0, y = -180 },
     frameLocked = true,
     soundEnabled = false,
     soundID = 8959,
     soundPath = nil,
+    debug = false,
 }
 
 ns.PRESET_SOUNDS = {
@@ -155,9 +168,14 @@ local function GetModeKey(instanceType, maxPlayers)
 end
 ns.GetModeKey = GetModeKey
 
-local function Print(msg)
+local function Print(msg, r, g, b)
     local prefix = "|cff3FC7EBLoadOutCaller|r: "
-    if DEFAULT_CHAT_FRAME then
+    if not DEFAULT_CHAT_FRAME then return end
+    if r and g and b then
+        local hex = string.format("|cff%02x%02x%02x",
+            math.floor(r * 255), math.floor(g * 255), math.floor(b * 255))
+        DEFAULT_CHAT_FRAME:AddMessage(prefix .. hex .. tostring(msg) .. "|r")
+    else
         DEFAULT_CHAT_FRAME:AddMessage(prefix .. tostring(msg))
     end
 end
@@ -277,6 +295,8 @@ local hideTimer
 local function ShowAnnouncement(text)
     local f = GetDisplayFrame()
     ApplyFontSize(f)
+    local color = LoadOutCallerDB.bannerColor or ns.defaults.bannerColor
+    f.text:SetTextColor(color.r, color.g, color.b)
     f.text:SetText(text)
     f:SetAlpha(1)
     f:Show()
@@ -418,7 +438,10 @@ ns.GetRoleMismatchMessage = GetRoleMismatchMessage
 local function EmitMessage(msg)
     if not msg or msg == "" then return end
     if LoadOutCallerDB.showText then ShowAnnouncement(msg) end
-    if LoadOutCallerDB.useChatMessage then Print(msg) end
+    if LoadOutCallerDB.useChatMessage then
+        local c = LoadOutCallerDB.chatColor or ns.defaults.chatColor
+        Print(msg, c.r, c.g, c.b)
+    end
     if LoadOutCallerDB.useTTS then SpeakTTS(msg) end
     PlayAlertSound()
 end
@@ -428,12 +451,14 @@ local FORCE_FLAGS = {
     enter      = "alwaysOnEnter",
     readycheck = "alwaysOnReadyCheck",
     matchstart = "alwaysOnMatchStartCountdown",
+    invite     = "alwaysOnInvite",
 }
 
 local INSTANCE_REASONS = {
     enter      = true,
     readycheck = true,
     matchstart = true,
+    invite     = true,
 }
 
 local function ShouldSkip(reason, mode, buildName)
@@ -459,7 +484,7 @@ local BUILD_NAME_MAX_RETRIES = 3
 local BUILD_NAME_RETRY_DELAY = 2
 local lastAnnounceTime = 0
 
-local function Announce(reason, retryCount)
+local function Announce(reason, retryCount, overrideModeKey)
     if not LoadOutCallerDB.enabled and reason ~= "test" then return end
 
     if reason ~= "test" then
@@ -474,16 +499,25 @@ local function Announce(reason, retryCount)
     if not isSaved and reason ~= "test" then
         retryCount = retryCount or 0
         if retryCount < BUILD_NAME_MAX_RETRIES then
-            C_Timer.After(BUILD_NAME_RETRY_DELAY, function() Announce(reason, retryCount + 1) end)
+            C_Timer.After(BUILD_NAME_RETRY_DELAY, function() Announce(reason, retryCount + 1, overrideModeKey) end)
             return
         end
     end
 
-    local _, instanceType, _, _, maxPlayers = GetInstanceInfo()
-    local modeKey = GetModeKey(instanceType, maxPlayers)
+    local modeKey = overrideModeKey
+    if not modeKey then
+        local _, instanceType, _, _, maxPlayers = GetInstanceInfo()
+        modeKey = GetModeKey(instanceType, maxPlayers)
+    end
     local mode = modeKey and LoadOutCallerDB.modes and LoadOutCallerDB.modes[modeKey] or nil
 
-    if ShouldSkip(reason, mode, buildName) then
+    local skipped = ShouldSkip(reason, mode, buildName)
+    if LoadOutCallerDB.debug then
+        Print(string.format("[debug] reason=%s instType=%s maxP=%s mode=%s keyword=%s build=%q isSaved=%s -> skipped=%s",
+            tostring(reason), tostring(instanceType), tostring(maxPlayers), tostring(modeKey),
+            tostring(mode and mode.skipKeyword), tostring(buildName), tostring(isSaved), tostring(skipped)))
+    end
+    if skipped then
         return
     end
 
@@ -523,11 +557,92 @@ local function HandleRoleChanged(changedName)
     EmitMessage(mismatchMsg)
 end
 
+local lastKnownSpec
 local function HandleSpecializationChanged(unit)
     if unit and unit ~= "player" then return end
     if not LoadOutCallerDB.enabled then return end
     if not LoadOutCallerDB.announceOnSpecChange then return end
+
+    -- WoW fires PLAYER_SPECIALIZATION_CHANGED on instance enter/exit (e.g. arenas)
+    -- even when the spec didn't actually change. Only announce on a real change.
+    local currentSpec = GetSpecialization and GetSpecialization() or nil
+    if currentSpec == lastKnownSpec then return end
+    lastKnownSpec = currentSpec
+
     C_Timer.After(0.3, function() Announce("specchange") end)
+end
+
+local lastLfgProposalKey
+local function HandleLFGProposalShow()
+    if not LoadOutCallerDB.enabled then return end
+    if not GetLFGProposal then return end
+    local proposalExists, id, _, subtypeID = GetLFGProposal()
+    if not proposalExists then return end
+
+    -- subtypeID: 1=Dungeon, 2=Heroic Dungeon, 3=Raid (LFR), 5=Flex Raid.
+    -- M+ is premade and never fires LFG_PROPOSAL_SHOW.
+    local modeKey
+    if subtypeID == 1 or subtypeID == 2 then
+        modeKey = "dungeon"
+    elseif subtypeID == 3 or subtypeID == 5 then
+        modeKey = "raid"
+    end
+    if not modeKey then return end
+
+    local key = modeKey .. ":" .. tostring(id)
+    if lastLfgProposalKey == key then return end
+    lastLfgProposalKey = key
+
+    local mode = LoadOutCallerDB.modes and LoadOutCallerDB.modes[modeKey]
+    if not mode or not mode.announceOnInvite then return end
+    Announce("invite", nil, modeKey)
+end
+
+local lastInvitedQueueKey
+local function HandleBattlefieldStatus(index)
+    if not LoadOutCallerDB.enabled then return end
+    if not GetBattlefieldStatus then return end
+
+    local function process(i)
+        -- Retail signature (post-Patch 5.2.0):
+        -- status, mapName, teamSize, registeredMatch, suspendedQueue, queueType, gameType, role, asGroup, shortDescription, longDescription, isSoloQueue
+        local status, mapName, teamSize, _, _, queueType = GetBattlefieldStatus(i)
+        if status ~= "confirm" then return end
+
+        local qt = queueType and tostring(queueType):upper() or ""
+        local modeKey
+        if qt:find("ARENA") then
+            -- queueType can be "ARENA" (rated) or "ARENASKIRMISH" (unrated, always 3v3).
+            if teamSize == 2 then
+                modeKey = "arena2v2"
+            else
+                modeKey = "arena3v3"
+            end
+        else
+            modeKey = "battleground"
+        end
+
+        if LoadOutCallerDB.debug then
+            Print(string.format("[debug] BF idx=%s status=%s map=%s teamSize=%s queueType=%s -> mode=%s",
+                tostring(i), tostring(status), tostring(mapName), tostring(teamSize), tostring(queueType), tostring(modeKey)))
+        end
+
+        local key = modeKey .. ":" .. tostring(mapName) .. ":" .. tostring(queueType)
+        if lastInvitedQueueKey == key then return end
+        lastInvitedQueueKey = key
+
+        local mode = LoadOutCallerDB.modes and LoadOutCallerDB.modes[modeKey]
+        if not mode or not mode.announceOnInvite then return end
+        Announce("invite", nil, modeKey)
+    end
+
+    if index then
+        process(index)
+    elseif GetMaxBattlefieldID then
+        for i = 1, GetMaxBattlefieldID() do
+            process(i)
+        end
+    end
 end
 
 local PVP_BEGIN_TIMER = (Enum and Enum.StartTimerType and Enum.StartTimerType.PvPBeginTimer) or 1
@@ -611,6 +726,7 @@ local function HandlePlayerLogin()
     SLASH_LOADOUTCALLER2 = "/loadoutcaller"
     SlashCmdList["LOADOUTCALLER"] = HandleSlash
     HookEditMode()
+    lastKnownSpec = GetSpecialization and GetSpecialization() or nil
 end
 
 local EVENT_HANDLERS = {
@@ -621,6 +737,8 @@ local EVENT_HANDLERS = {
     PLAYER_SPECIALIZATION_CHANGED = HandleSpecializationChanged,
     ROLE_CHANGED_INFORM           = HandleRoleChanged,
     START_TIMER                   = HandleStartTimer,
+    UPDATE_BATTLEFIELD_STATUS     = HandleBattlefieldStatus,
+    LFG_PROPOSAL_SHOW             = HandleLFGProposalShow,
 }
 
 local bootstrap = CreateFrame("Frame")

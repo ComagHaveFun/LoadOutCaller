@@ -125,6 +125,66 @@ local function MakeButton(parent, label, width, onClick, point, relativeTo, relP
     return b
 end
 
+local function ShowColorPicker(r, g, b, callback)
+    if not ColorPickerFrame then return end
+    local function apply()
+        local nr, ng, nb = ColorPickerFrame:GetColorRGB()
+        callback(nr, ng, nb)
+    end
+    if ColorPickerFrame.SetupColorPickerAndShow then
+        ColorPickerFrame:SetupColorPickerAndShow({
+            r = r, g = g, b = b,
+            swatchFunc = apply,
+            cancelFunc = function(prev)
+                if prev then callback(prev.r, prev.g, prev.b) end
+            end,
+        })
+    else
+        ColorPickerFrame.func = apply
+        ColorPickerFrame.cancelFunc = function(prev)
+            if prev then callback(prev.r, prev.g, prev.b) end
+        end
+        ColorPickerFrame.previousValues = { r = r, g = g, b = b }
+        ColorPickerFrame:SetColorRGB(r, g, b)
+        ShowUIPanel(ColorPickerFrame)
+    end
+end
+
+local function MakeColorSwatch(parent, label, tooltip, getColor, setColor, yOffset)
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetSize(20, 20)
+    btn:SetPoint("TOPLEFT", parent, "TOPLEFT", 24, yOffset)
+
+    local border = btn:CreateTexture(nil, "BACKGROUND")
+    border:SetPoint("TOPLEFT", -1, 1)
+    border:SetPoint("BOTTOMRIGHT", 1, -1)
+    border:SetColorTexture(0.4, 0.4, 0.4, 1)
+
+    local swatch = btn:CreateTexture(nil, "OVERLAY")
+    swatch:SetAllPoints()
+
+    local function refresh()
+        local r, g, b = getColor()
+        swatch:SetColorTexture(r, g, b)
+    end
+
+    local labelFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    labelFS:SetPoint("LEFT", btn, "RIGHT", 8, 0)
+    labelFS:SetText(label)
+
+    btn:SetScript("OnClick", function()
+        local r, g, b = getColor()
+        ShowColorPicker(r, g, b, function(nr, ng, nb)
+            setColor(nr, ng, nb)
+            refresh()
+        end)
+    end)
+    btn:SetScript("OnShow", refresh)
+    ApplyTooltip(btn, label, tooltip)
+    btn.Refresh = refresh
+    return btn
+end
+
 local function GetVoiceList()
     local list = {}
     if C_VoiceChat and C_VoiceChat.GetTtsVoices then
@@ -233,6 +293,16 @@ local function BuildModePanel(modeKey, title, enterLabel, enterTip, opts)
         y = y - 24
     end
 
+    if opts.showInvite then
+        MakeCheckbox(panel,
+            opts.inviteLabel or L["Announce on queue invite (PvP queue popped)"],
+            opts.inviteTip or L["Triggers the announcement when the PvP queue pops and the 'Enter Battle' dialog appears - the earliest moment to switch builds."],
+            function() return LoadOutCallerDB.modes[modeKey].announceOnInvite end,
+            function(v) LoadOutCallerDB.modes[modeKey].announceOnInvite = v end,
+            y)
+        y = y - 24
+    end
+
     y = y - 8
 
     MakeCheckbox(panel,
@@ -259,6 +329,16 @@ local function BuildModePanel(modeKey, title, enterLabel, enterTip, opts)
             L["When active, always announce on the match start countdown, even if the build name contains the skip keyword."],
             function() return LoadOutCallerDB.modes[modeKey].alwaysOnMatchStartCountdown end,
             function(v) LoadOutCallerDB.modes[modeKey].alwaysOnMatchStartCountdown = v end,
+            y)
+        y = y - 24
+    end
+
+    if opts.showInvite then
+        MakeCheckbox(panel,
+            L["Always on queue invite (ignore skip keyword)"],
+            L["When active, always announce on queue invite, even if the build name contains the skip keyword."],
+            function() return LoadOutCallerDB.modes[modeKey].alwaysOnInvite end,
+            function(v) LoadOutCallerDB.modes[modeKey].alwaysOnInvite = v end,
             y)
         y = y - 24
     end
@@ -319,6 +399,15 @@ local function BuildRootPanel()
         function(v) LoadOutCallerDB.announceOnSpecChange = v end,
         -148)
 
+    MakeSectionHeader(panel, L["Troubleshooting"], -184)
+
+    widgets.debug = MakeCheckbox(panel,
+        L["Debug mode"],
+        L["Prints verbose diagnostic messages to chat (mode detection, battlefield status, skip decisions). Off by default - enable only when reporting a bug."],
+        function() return LoadOutCallerDB.debug end,
+        function(v) LoadOutCallerDB.debug = v end,
+        -208)
+
     return panel
 end
 
@@ -326,34 +415,73 @@ local function BuildDisplayPanel()
     local panel = NewSubPanel(L["Display & Frame"])
     AddPanelTitle(panel, L["Display & Frame"])
 
+    MakeLabel(panel, L["Message template (placeholder: {loadoutname}):"], 24, -64)
+    widgets.ttsTemplate = MakeEditBox(panel, 460,
+        function() return LoadOutCallerDB.ttsTemplate end,
+        function(v) LoadOutCallerDB.ttsTemplate = v end,
+        -84, 32)
+
+    MakeButton(panel, L["Reset to default"], 140,
+        function()
+            LoadOutCallerDB.ttsTemplate = ns.defaults.ttsTemplate
+            if widgets.ttsTemplate and widgets.ttsTemplate.Refresh then
+                widgets.ttsTemplate:Refresh()
+            end
+        end,
+        "TOPLEFT", panel, "TOPLEFT", 504, -84)
+
     widgets.showText = MakeCheckbox(panel,
         L["Show on-screen text"],
         L["Displays the build name as large text on screen (~5s fade)."],
         function() return LoadOutCallerDB.showText end,
         function(v) LoadOutCallerDB.showText = v end,
-        -64)
+        -120)
 
     widgets.useChatMessage = MakeCheckbox(panel,
         L["Post to chat"],
         L["Prints the announcement to your chat window (visible only to you)."],
         function() return LoadOutCallerDB.useChatMessage end,
         function(v) LoadOutCallerDB.useChatMessage = v end,
-        -88)
+        -144)
 
     widgets.bannerDuration = MakeSlider(panel, "LoadOutCallerDurationSlider",
         L["Banner duration (seconds)"], 1, 15, 1,
         function() return LoadOutCallerDB.bannerDuration end,
         function(v) LoadOutCallerDB.bannerDuration = v end,
-        -128)
+        -184)
 
     widgets.bannerFontSize = MakeSlider(panel, "LoadOutCallerFontSizeSlider",
         L["Banner font size"], 12, 64, 2,
         function() return LoadOutCallerDB.bannerFontSize end,
         function(v) LoadOutCallerDB.bannerFontSize = v end,
-        -168)
+        -224)
+
+    widgets.bannerColor = MakeColorSwatch(panel,
+        L["On-screen text color"],
+        L["Pick the color of the on-screen banner text."],
+        function()
+            local c = LoadOutCallerDB.bannerColor or ns.defaults.bannerColor
+            return c.r, c.g, c.b
+        end,
+        function(r, g, b)
+            LoadOutCallerDB.bannerColor = { r = r, g = g, b = b }
+        end,
+        -260)
+
+    widgets.chatColor = MakeColorSwatch(panel,
+        L["Chat text color"],
+        L["Pick the color of the chat-message text (the |cff3FC7EBLoadOutCaller|r prefix stays addon-blue)."],
+        function()
+            local c = LoadOutCallerDB.chatColor or ns.defaults.chatColor
+            return c.r, c.g, c.b
+        end,
+        function(r, g, b)
+            LoadOutCallerDB.chatColor = { r = r, g = g, b = b }
+        end,
+        -288)
 
     local editHint = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    editHint:SetPoint("TOPLEFT", 24, -208)
+    editHint:SetPoint("TOPLEFT", 24, -324)
     editHint:SetWidth(500)
     editHint:SetJustifyH("LEFT")
     editHint:SetText(L["Move display frame: switch to Edit Mode (Esc -> Edit Mode). The frame will appear automatically and can be placed with the mouse."])
@@ -372,7 +500,7 @@ local function BuildDisplayPanel()
                 EditModeManagerFrame:Show()
             end
         end,
-        "TOPLEFT", panel, "TOPLEFT", 24, -244)
+        "TOPLEFT", panel, "TOPLEFT", 24, -360)
 
     return panel
 end
@@ -481,38 +609,30 @@ local function BuildTTSPanel()
         function(v) LoadOutCallerDB.useTTS = v end,
         -64)
 
-    MakeLabel(panel, L["TTS text template (placeholder: {loadoutname}):"], 24, -96)
-    widgets.ttsTemplate = MakeEditBox(panel, 480,
-        function() return LoadOutCallerDB.ttsTemplate end,
-        function(v) LoadOutCallerDB.ttsTemplate = v end,
-        -116, 32)
+    local templateHint = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    templateHint:SetPoint("TOPLEFT", 24, -96)
+    templateHint:SetWidth(500)
+    templateHint:SetJustifyH("LEFT")
+    templateHint:SetText(L["The spoken text uses the message template configured under 'Display & Frame'."])
+    templateHint:SetTextColor(0.7, 0.7, 0.7)
 
-    MakeButton(panel, L["Reset to default"], 140,
-        function()
-            LoadOutCallerDB.ttsTemplate = ns.defaults.ttsTemplate
-            if widgets.ttsTemplate and widgets.ttsTemplate.Refresh then
-                widgets.ttsTemplate:Refresh()
-            end
-        end,
-        "TOPLEFT", panel, "TOPLEFT", 524, -116)
-
-    MakeLabel(panel, L["TTS voice:"], 24, -148)
+    MakeLabel(panel, L["TTS voice:"], 24, -128)
     widgets.ttsVoice = MakeVoiceDropdown(panel, "LoadOutCallerVoiceDropdown",
         function() return LoadOutCallerDB.ttsVoiceID or 0 end,
         function(v) LoadOutCallerDB.ttsVoiceID = v end,
-        -166)
+        -146)
 
     widgets.ttsVolume = MakeSlider(panel, "LoadOutCallerVolumeSlider",
         L["Volume"], 0, 100, 5,
         function() return LoadOutCallerDB.ttsVolume end,
         function(v) LoadOutCallerDB.ttsVolume = v end,
-        -210)
+        -190)
 
     widgets.ttsRate = MakeSlider(panel, "LoadOutCallerRateSlider",
         L["Speed"], -10, 10, 1,
         function() return LoadOutCallerDB.ttsRate end,
         function(v) LoadOutCallerDB.ttsRate = v end,
-        -250)
+        -230)
 
     widgets.testButton = MakeButton(panel,
         L["Test announcement"],
@@ -524,7 +644,7 @@ local function BuildTTSPanel()
                 ns.Announce("test")
             end
         end,
-        "TOPLEFT", panel, "TOPLEFT", 24, -294)
+        "TOPLEFT", panel, "TOPLEFT", 24, -274)
 
     return panel
 end
@@ -535,14 +655,14 @@ local MODE_PANEL_DEFS = {
         title = L["Mythic+ / Dungeons"],
         enterLabel = L["Announce on entering a dungeon"],
         enterTip = L["Triggers the announcement when you enter a Mythic+ or 5-man dungeon."],
-        opts = nil,
+        opts = { showInvite = true, inviteLabel = L["Announce on Dungeon Finder invite"], inviteTip = L["Triggers the announcement when the Dungeon Finder pops a 'Ready to enter' dialog (random / heroic dungeon). Premade groups and M+ don't fire this."] },
     },
     {
         modeKey = "raid",
         title = L["Raids"],
         enterLabel = L["Announce on entering a raid"],
         enterTip = L["Triggers the announcement when you enter a raid instance."],
-        opts = nil,
+        opts = { showInvite = true, inviteLabel = L["Announce on Raid Finder invite"], inviteTip = L["Triggers the announcement when the Raid Finder (LFR) or Flex Raid pops a 'Ready to enter' dialog. Premade groups don't fire this."] },
     },
     {
         modeKey = "delve",
@@ -556,21 +676,21 @@ local MODE_PANEL_DEFS = {
         title = L["Arena 2v2"],
         enterLabel = L["Announce on entering Arena 2v2"],
         enterTip = L["Triggers the announcement when you enter a 2v2 arena match (ranked or skirmish)."],
-        opts = { omitReadyCheck = true, showMatchStart = true },
+        opts = { omitReadyCheck = true, showMatchStart = true, showInvite = true },
     },
     {
         modeKey = "arena3v3",
         title = L["Arena 3v3"],
         enterLabel = L["Announce on entering Arena 3v3"],
         enterTip = L["Triggers the announcement when you enter a 3v3 arena match (ranked, skirmish, or Solo Shuffle)."],
-        opts = { omitReadyCheck = true, showMatchStart = true },
+        opts = { omitReadyCheck = true, showMatchStart = true, showInvite = true },
     },
     {
         modeKey = "battleground",
         title = L["Battlegrounds"],
         enterLabel = L["Announce on entering a battleground"],
         enterTip = L["Triggers the announcement when you enter a battleground (including Epic BGs and rated)."],
-        opts = { omitReadyCheck = true, showMatchStart = true },
+        opts = { omitReadyCheck = true, showMatchStart = true, showInvite = true },
     },
     {
         modeKey = "openworld_warmode",

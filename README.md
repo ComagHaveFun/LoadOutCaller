@@ -35,7 +35,9 @@ If you do neither, you will get warned every single time you enter instanced con
 - **Sound alerts**: curated Blizzard sound presets (Ready Check, Raid Warning, Alarm Clock, …). If [LibSharedMedia-3.0](https://www.curseforge.com/wow/addons/libsharedmedia-3-0) is installed, its sounds are offered too - but it's **not** a dependency.
 - **Smart skip**: if your active loadout already contains a keyword (e.g. `M+` in dungeons, `Raid` in raids, `2v2` in 2v2 arena), the announcement is silently skipped for that mode. Keywords are fully configurable and case-insensitive, and every mode has a one-click **Reset to default** button.
 - **Per-trigger "always announce"** flags per mode if you want the reminder unconditionally (e.g. on every raid ready check).
-- **Anti-duplicate cooldown**: multiple triggers firing within a few seconds (common on arena entry: enter + countdown) only produce one announcement.
+- **Queue-pop announcements**: fires *the moment a queue invite appears* - PvP (Battlefield-Status `confirm` event for Arena 2v2/3v3 and Battlegrounds) and PvE (Dungeon Finder / LFR via `LFG_PROPOSAL_SHOW`). This is the earliest possible moment to switch builds, ~60s before the actual instance enter. M+ and other premade groups don't fire this event by design.
+- **Anti-duplicate cooldown**: multiple triggers firing within a few seconds (common on arena entry: invite + enter + countdown) only produce one announcement.
+- **Customizable colors**: pick the on-screen banner color and the chat-message color independently (color picker, defaults to gold).
 - **Draggable display frame** integrated with Blizzard's **Edit Mode** - no clunky lock/unlock commands needed, just Esc -> Edit Mode.
 - **Fully configurable TTS**: voice, volume, speed, and a custom message template with a `{loadoutname}` placeholder.
 - **11 locales**: English, German, French, Spanish (ES+MX), Italian, Portuguese (BR), Russian, Korean, Simplified + Traditional Chinese.
@@ -76,12 +78,13 @@ Press **Esc -> Edit Mode**. The banner appears automatically, drag it wherever y
 The panel lives at **Esc -> Options -> AddOns -> LoadOutCaller** and is organised as a sidebar tree:
 
 - **LoadOutCaller** (main page) - master switch, role-mismatch warning, loadout-on-spec-change toggle.
-- **Mythic+ / Dungeons**, **Raids**, **Delves** - per-mode triggers: *Announce on entering*, *Announce on ready check*, *Always on enter*, *Always on ready check*, plus *Skip keyword* (defaults `M+`, `Raid`, `Delves`) with a **Reset** button and a hover-tooltip explaining how the skip works.
-- **Arena 2v2**, **Arena 3v3**, **Battlegrounds** - per-mode triggers: *Announce on entering*, *Announce on match start countdown*, *Always on enter*, *Always on match start countdown*, plus *Skip keyword* (defaults `2v2`, `3v3`, `BG`) with a **Reset** button.
+- **Mythic+ / Dungeons**, **Raids** - per-mode triggers: *Announce on entering*, *Announce on ready check*, *Announce on Dungeon Finder / Raid Finder invite* (LFG queue pop, fires only for random/heroic dungeons and LFR/Flex - not premade or M+), each with its own *Always on …* override. Plus *Skip keyword* (defaults `M+`, `Raid`) with **Reset** and hover-tooltip explanation.
+- **Delves** - same triggers minus the LFG-invite (Delves don't go through the Dungeon Finder).
+- **Arena 2v2**, **Arena 3v3**, **Battlegrounds** - per-mode triggers: *Announce on entering*, *Announce on match start countdown*, *Announce on queue invite* (fires the moment the "Enter Battle" dialog appears), each with its own *Always on …* override. Plus *Skip keyword* (defaults `2v2`, `3v3`, `BG`) with a **Reset** button.
 - **Open World (War Mode on)**, **Open World (War Mode off)** - **opt-in** (both off by default): fire the announcement when you zone into the open world with the respective War Mode state. Per-mode triggers: *Announce on entering*, *Always on enter*, plus *Skip keyword* (defaults `Warmode`, `Open World`) with a **Reset** button. Useful if you keep distinct loadouts for War Mode PvP vs. questing.
-- **Display & Frame** - on-screen text toggle, chat toggle, banner duration (1-15s), font size (12-64pt), Edit Mode button.
+- **Display & Frame** - **message template** (with `{loadoutname}` placeholder, used by banner / chat / TTS alike; **Reset** button restores the default *"Current loadout: {loadoutname}"*), on-screen text toggle, chat toggle, banner duration (1-15s), font size (12-64pt), **on-screen text color picker**, **chat text color picker**, Edit Mode button.
 - **Sound** - sound-on-announce toggle, alert sound dropdown (Blizzard presets + LibSharedMedia if installed), test button.
-- **Text-to-Speech** - *Use TTS*, template (with `{loadoutname}` placeholder; Reset button restores the default "Current loadout: {loadoutname}"), voice dropdown, volume, speed, test button.
+- **Text-to-Speech** - *Use TTS*, voice dropdown, volume, speed, test button. (The spoken text uses the same template as the banner / chat - configured in *Display & Frame*.)
 
 Every Skip-keyword input has a tooltip on hover explaining the case-insensitive substring match.
 

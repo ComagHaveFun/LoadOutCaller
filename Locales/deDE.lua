@@ -8,32 +8,25 @@ L["Announces your active talent build on instance enter and ready check."] = "Sa
 L["Addon enabled"] = "Addon aktiviert"
 L["Master switch. When disabled, nothing happens."] = "Haupt-Schalter. Wenn deaktiviert, passiert nichts."
 
+-- Troubleshooting
+L["Troubleshooting"] = "Fehlersuche"
+L["Debug mode"] = "Debug-Modus"
+L["Prints verbose diagnostic messages to chat (mode detection, battlefield status, skip decisions). Off by default - enable only when reporting a bug."] = "Gibt ausf\195\188hrliche Diagnose-Meldungen im Chat aus (Modus-Erkennung, Battlefield-Status, Skip-Entscheidungen). Standardm\195\164\195\159ig aus - nur zum Melden eines Bugs aktivieren."
+
 -- Triggers
-L["Triggers"] = "Ausl\195\182ser"
-L["Announce on instance enter (5-man dungeon or raid)"] = "Bei Instanz-Eintritt ansagen (5er-Dungeon oder Schlachtzug)"
-L["Triggers the announcement when you enter a dungeon or raid instance."] = "L\195\182st die Ansage aus, wenn du eine Dungeon- oder Schlachtzug-Instanz betrittst."
 L["Announce on ready check"] = "Bei Ready-Check ansagen"
-L["Triggers the announcement when a ready check is initiated in a dungeon/raid."] = "L\195\182st die Ansage aus, wenn in Dungeon/Schlachtzug ein Ready-Check gestartet wird."
-L["Always on instance enter (ignore skip keyword)"] = "Immer bei Instanz-Eintritt (ignoriert Skip-Keyword)"
-L["When active, always announce on instance enter, even if the build name contains the skip keyword."] = "Wenn aktiv, wird bei Instanz-Eintritt immer angesagt, auch wenn der Build-Name das Skip-Keyword enth\195\164lt."
 L["Always on ready check (ignore skip keyword)"] = "Immer bei Ready-Check (ignoriert Skip-Keyword)"
 L["When active, always announce on ready check, even if the build name contains the skip keyword."] = "Wenn aktiv, wird bei jedem Ready-Check angesagt, auch wenn der Build-Name das Skip-Keyword enth\195\164lt."
 
 -- Skip keywords
-L["Skip keywords (case-insensitive)"] = "Skip-Keywords (gro\195\159-/kleinschreibungsunabh\195\164ngig)"
-L["If the active build name contains this keyword, the announcement is skipped."] = "Wenn der aktive Build-Name dieses Wort enth\195\164lt, wird die Ansage geschluckt."
-L["5-man dungeons:"] = "5er-Instanzen:"
-L["Raids:"] = "Schlachtz\195\188ge:"
 
 -- Display
-L["Display"] = "Anzeige"
 L["Show on-screen text"] = "On-Screen-Text anzeigen"
 L["Displays the build name as large text on screen (~5s fade)."] = "Zeigt den Build-Namen als gro\195\159en Text auf dem Bildschirm (~5s Fade)."
 L["Post to chat"] = "In den Chat schreiben"
 L["Prints the announcement to your chat window (visible only to you)."] = "Gibt die Ansage in deinem Chat-Fenster aus (nur f\195\188r dich sichtbar)."
 L["Banner duration (seconds)"] = "Banner-Dauer (Sekunden)"
 L["Banner font size"] = "Banner-Schriftgr\195\182\195\159e"
-L["Sound alert"] = "Sound-Alarm"
 L["Play a sound on announcement"] = "Sound bei Ansage abspielen"
 L["Plays a sound via Blizzard's sound system. Works independently of TTS."] = "Spielt einen Sound \195\188ber Blizzards Sound-System ab. Funktioniert unabh\195\164ngig von TTS."
 L["Alert sound:"] = "Alarm-Sound:"
@@ -54,9 +47,7 @@ L["Always on enter (ignore skip keyword)"] = "Immer beim Betreten (Skip-Keyword 
 L["When active, always announce on enter, even if the build name contains the skip keyword."] = "Wenn aktiv, wird beim Betreten immer angesagt, auch wenn der Build-Name das Skip-Keyword enth\195\164lt."
 L["Skip keyword:"] = "Skip-Keyword:"
 L["Skip keyword: if your active loadout name contains this word (case-insensitive), the announcement is skipped for that mode."] = "Skip-Keyword: Wenn dein aktiver Loadout-Name dieses Wort enth\195\164lt (unabh\195\164ngig von Gro\195\159-/Kleinschreibung), wird die Ansage f\195\188r diesen Modus geschluckt."
-L["Reset"] = "Zur\195\188cksetzen"
 L["Reset to default"] = "Auf Standard zur\195\188cksetzen"
-L["General"] = "Allgemein"
 L["Sound"] = "Sound"
 L["Display & Frame"] = "Anzeige & Frame"
 
@@ -91,6 +82,18 @@ L["Announce on match start countdown"] = "Bei Match-Start-Countdown ansagen"
 L["Triggers the announcement when the PvP match start countdown begins."] = "L\195\182st die Ansage aus, wenn der PvP-Match-Start-Countdown beginnt."
 L["Always on match start countdown (ignore skip keyword)"] = "Immer bei Match-Start-Countdown (Skip-Keyword ignorieren)"
 L["When active, always announce on the match start countdown, even if the build name contains the skip keyword."] = "Wenn aktiv, wird beim Match-Start-Countdown immer angesagt, auch wenn der Build-Name das Skip-Keyword enth\195\164lt."
+
+-- PvP queue invite
+L["Announce on queue invite (PvP queue popped)"] = "Bei Queue-Pop ansagen (PvP-Einladung)"
+L["Triggers the announcement when the PvP queue pops and the 'Enter Battle' dialog appears - the earliest moment to switch builds."] = "L\195\182st die Ansage aus, sobald die PvP-Queue plopp und der 'Beitreten'-Dialog erscheint - der fr\195\188heste Zeitpunkt, den Build noch zu wechseln."
+L["Always on queue invite (ignore skip keyword)"] = "Immer bei Queue-Pop (Skip-Keyword ignorieren)"
+L["When active, always announce on queue invite, even if the build name contains the skip keyword."] = "Wenn aktiv, wird beim Queue-Pop immer angesagt, auch wenn der Build-Name das Skip-Keyword enth\195\164lt."
+
+-- PvE queue invite (LFG / LFR)
+L["Announce on Dungeon Finder invite"] = "Bei Dungeonsuche-Einladung ansagen"
+L["Triggers the announcement when the Dungeon Finder pops a 'Ready to enter' dialog (random / heroic dungeon). Premade groups and M+ don't fire this."] = "L\195\182st die Ansage aus, wenn die Dungeonsuche einen 'Bereit zum Betreten'-Dialog \195\182ffnet (Zufalls-/heroischer Dungeon). Premade-Gruppen und Mythic+ feuern dieses Event nicht."
+L["Announce on Raid Finder invite"] = "Bei Schlachtzugssuche-Einladung ansagen"
+L["Triggers the announcement when the Raid Finder (LFR) or Flex Raid pops a 'Ready to enter' dialog. Premade groups don't fire this."] = "L\195\182st die Ansage aus, wenn die Schlachtzugssuche (LFR) oder Flex-Raid einen 'Bereit zum Betreten'-Dialog \195\182ffnet. Premade-Gruppen feuern dieses Event nicht."
 L["Move display frame: switch to Edit Mode (Esc -> Edit Mode). The frame will appear automatically and can be placed with the mouse."] = "Anzeige-Frame verschieben: In den Bearbeitungsmodus wechseln (Esc -> Bearbeitungsmodus). Der Frame erscheint dann automatisch und kann mit der Maus platziert werden."
 L["Open Edit Mode"] = "Bearbeitungsmodus \195\182ffnen"
 
@@ -98,13 +101,17 @@ L["Open Edit Mode"] = "Bearbeitungsmodus \195\182ffnen"
 L["Text-to-Speech (TTS)"] = "Text-to-Speech (TTS)"
 L["Use TTS"] = "TTS verwenden"
 L["Speaks the build name via WoW's built-in TTS."] = "Spricht den Build-Namen \195\188ber die eingebaute WoW-TTS aus."
-L["TTS text template (placeholder: {loadoutname}):"] = "TTS-Text-Template (Platzhalter: {loadoutname}):"
+L["Message template (placeholder: {loadoutname}):"] = "Nachrichten-Template (Platzhalter: {loadoutname}):"
+L["The spoken text uses the message template configured under 'Display & Frame'."] = "Der gesprochene Text nutzt das Nachrichten-Template aus 'Anzeige & Frame'."
+L["On-screen text color"] = "Farbe des On-Screen-Texts"
+L["Pick the color of the on-screen banner text."] = "W\195\164hle die Farbe des On-Screen-Banner-Texts."
+L["Chat text color"] = "Farbe des Chat-Texts"
+L["Pick the color of the chat-message text (the |cff3FC7EBLoadOutCaller|r prefix stays addon-blue)."] = "W\195\164hle die Farbe des Chat-Nachrichten-Texts (das |cff3FC7EBLoadOutCaller|r-Pr\195\164fix bleibt Addon-Blau)."
 L["TTS voice:"] = "TTS-Stimme:"
 L["Volume"] = "Lautst\195\164rke"
 L["Speed"] = "Geschwindigkeit"
 L["Test announcement"] = "Test-Ansage"
 L["TTS API not available (C_VoiceChat.SpeakText missing)."] = "TTS-API nicht verf\195\188gbar (C_VoiceChat.SpeakText fehlt)."
-L["TTS test sent: {details}"] = "TTS-Test gesendet: {details}"
 L["TTS error: {details}"] = "TTS-Fehler: {details}"
 
 -- Runtime strings
