@@ -572,6 +572,31 @@ local function HandleSpecializationChanged(unit)
     C_Timer.After(0.3, function() Announce("specchange") end)
 end
 
+local lastKnownLoadoutName
+local function HandleTraitConfigUpdated(configID)
+    if LoadOutCallerDB.debug then
+        Print(string.format("[debug] TRAIT_CONFIG_UPDATED fired configID=%s enabled=%s announceOnSpecChange=%s",
+            tostring(configID), tostring(LoadOutCallerDB.enabled), tostring(LoadOutCallerDB.announceOnSpecChange)))
+    end
+    if not LoadOutCallerDB.enabled then return end
+    if not LoadOutCallerDB.announceOnSpecChange then return end
+
+    -- TRAIT_CONFIG_UPDATED fires on commit, on load-saved-config, and spuriously
+    -- on instance transitions. On fire, GetLastSelectedSavedConfigID often still
+    -- reports the previous loadout - delay the name lookup so the game has a
+    -- chance to update the active saved config pointer. Dedup by name.
+    C_Timer.After(0.3, function()
+        local currentName = GetActiveBuildName()
+        if LoadOutCallerDB.debug then
+            Print(string.format("[debug] TRAIT_CONFIG_UPDATED resolved current=%q last=%q",
+                tostring(currentName), tostring(lastKnownLoadoutName)))
+        end
+        if currentName == lastKnownLoadoutName then return end
+        lastKnownLoadoutName = currentName
+        Announce("loadoutchange")
+    end)
+end
+
 local lastLfgProposalKey
 local function HandleLFGProposalShow()
     if not LoadOutCallerDB.enabled then return end
@@ -647,19 +672,43 @@ end
 
 local PVP_BEGIN_TIMER = (Enum and Enum.StartTimerType and Enum.StartTimerType.PvPBeginTimer) or 1
 
-local lastMatchStartFire = 0
+local matchStartRecheckTimer
 local function HandleStartTimer(timerType, timeSeconds, totalTime)
+    if LoadOutCallerDB.debug then
+        Print(string.format("[debug] START_TIMER timerType=%s timeSeconds=%s totalTime=%s PVP_BEGIN_TIMER=%s",
+            tostring(timerType), tostring(timeSeconds), tostring(totalTime), tostring(PVP_BEGIN_TIMER)))
+    end
     if timerType ~= PVP_BEGIN_TIMER then return end
     if not LoadOutCallerDB.enabled then return end
-    local now = GetTime()
-    if now - lastMatchStartFire < 60 then return end
     local _, instanceType, _, _, maxPlayers = GetInstanceInfo()
     local modeKey = GetModeKey(instanceType, maxPlayers)
     if not modeKey then return end
     local mode = LoadOutCallerDB.modes and LoadOutCallerDB.modes[modeKey]
     if not mode or not mode.announceOnMatchStartCountdown then return end
-    lastMatchStartFire = now
+
     Announce("matchstart")
+
+    -- Last-chance re-check ~8s before the gates open. Catches the case where
+    -- the player swaps loadout mid-countdown: the initial announce was skipped
+    -- (build matched), they swap to a wrong build, and the normal dedup would
+    -- keep us silent until the match starts. Fresh timer per START_TIMER
+    -- fire - if START_TIMER re-fires with a refreshed countdown, the latest
+    -- timeSeconds wins.
+    if matchStartRecheckTimer then
+        matchStartRecheckTimer:Cancel()
+        matchStartRecheckTimer = nil
+    end
+    local secs = tonumber(timeSeconds) or 0
+    local delay = secs - 8
+    if delay > 0 then
+        matchStartRecheckTimer = C_Timer.NewTimer(delay, function()
+            matchStartRecheckTimer = nil
+            if LoadOutCallerDB.debug then
+                Print("[debug] matchstart last-chance re-check")
+            end
+            Announce("matchstart")
+        end)
+    end
 end
 
 local lastAnnouncedInstanceID
@@ -727,6 +776,7 @@ local function HandlePlayerLogin()
     SlashCmdList["LOADOUTCALLER"] = HandleSlash
     HookEditMode()
     lastKnownSpec = GetSpecialization and GetSpecialization() or nil
+    lastKnownLoadoutName = GetActiveBuildName()
 end
 
 local EVENT_HANDLERS = {
@@ -735,6 +785,7 @@ local EVENT_HANDLERS = {
     PLAYER_ENTERING_WORLD         = HandleEnteringWorld,
     READY_CHECK                   = HandleReadyCheck,
     PLAYER_SPECIALIZATION_CHANGED = HandleSpecializationChanged,
+    TRAIT_CONFIG_UPDATED          = HandleTraitConfigUpdated,
     ROLE_CHANGED_INFORM           = HandleRoleChanged,
     START_TIMER                   = HandleStartTimer,
     UPDATE_BATTLEFIELD_STATUS     = HandleBattlefieldStatus,
