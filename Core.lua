@@ -97,6 +97,7 @@ ns.defaults = {
     soundID = 8959,
     soundPath = nil,
     debug = false,
+    matchStartRecheckSeconds = 15,
 }
 
 ns.PRESET_SOUNDS = {
@@ -155,9 +156,34 @@ local function IsWarMode()
     return false
 end
 
+local INSTANCE_PARTY_CATEGORY = LE_PARTY_CATEGORY_INSTANCE
+    or (Enum and Enum.PartyCategory and Enum.PartyCategory.Instance)
+    or 2
+
 local function GetModeKey(instanceType, maxPlayers)
     if instanceType == "arena" then
-        return maxPlayers == 4 and "arena2v2" or "arena3v3"
+        -- In the arena starting room the home party is reshuffled into an
+        -- instance group: GetNumGroupMembers() returns 1 (self only) and
+        -- maxPlayers is often 0. The instance-category group count gives the
+        -- actual team size (2 for 2v2, 3 for 3v3, up to 6 for Solo Shuffle).
+        local instGroup = GetNumGroupMembers and GetNumGroupMembers(INSTANCE_PARTY_CATEGORY) or 0
+        local chosen
+        if instGroup == 2 then
+            chosen = "arena2v2"
+        elseif instGroup >= 3 then
+            chosen = "arena3v3"
+        elseif maxPlayers == 4 or maxPlayers == 2 then
+            chosen = "arena2v2"
+        elseif maxPlayers == 6 or maxPlayers == 3 then
+            chosen = "arena3v3"
+        else
+            chosen = "arena3v3"
+        end
+        if LoadOutCallerDB and LoadOutCallerDB.debug and ns.Print then
+            ns.Print(string.format("[debug] GetModeKey arena maxPlayers=%s instGroup=%s -> %s",
+                tostring(maxPlayers), tostring(instGroup), tostring(chosen)))
+        end
+        return chosen
     end
     local mapped = INSTANCE_TYPE_TO_MODE[instanceType]
     if mapped then return mapped end
@@ -190,6 +216,22 @@ local function GetConfigName(configID)
 end
 
 local function GetActiveBuildName()
+    -- Improved Talent Loadouts (ITL) routes all its per-spec profiles through a
+    -- single Blizzard-side "[ITL] Temp" config, so GetLastSelectedSavedConfigID
+    -- always reports the same placeholder name. If ITL is loaded, prefer its
+    -- own current-loadout name. If the user hasn't used ITL this session,
+    -- GetCurrentLoadout returns nil and we fall through to the Blizzard API.
+    if ITLAPI and ITLAPI.GetCurrentLoadout then
+        local ok, info = pcall(ITLAPI.GetCurrentLoadout, ITLAPI)
+        if LoadOutCallerDB and LoadOutCallerDB.debug then
+            Print(string.format("[debug] GetActiveBuildName ITL ok=%s hasInfo=%s name=%s",
+                tostring(ok), tostring(info ~= nil), tostring(info and info.name)))
+        end
+        if ok and info and type(info.name) == "string" and info.name ~= "" then
+            return info.name, true
+        end
+    end
+
     if not C_ClassTalents then
         return L["No active build"], false
     end
@@ -461,6 +503,21 @@ local INSTANCE_REASONS = {
     invite     = true,
 }
 
+local MODE_TRIGGER_FLAGS = {
+    "announceOnEnter",
+    "announceOnReadyCheck",
+    "announceOnMatchStartCountdown",
+    "announceOnInvite",
+}
+
+local function IsModeEnabled(mode)
+    if not mode then return false end
+    for _, flag in ipairs(MODE_TRIGGER_FLAGS) do
+        if mode[flag] then return true end
+    end
+    return false
+end
+
 local function ShouldSkip(reason, mode, buildName)
     if reason == "test" then return false end
     -- Instance-triggered announcements only apply inside a tracked mode.
@@ -468,6 +525,14 @@ local function ShouldSkip(reason, mode, buildName)
     -- by the time it fires, mode is nil and we must skip.
     if not mode then
         return INSTANCE_REASONS[reason] == true
+    end
+
+    -- Loadout/spec changes are passive: they should respect the mode's overall
+    -- trigger state. If the user has disabled every trigger for this mode
+    -- (e.g. Open World with announceOnEnter=false), stay silent even on a
+    -- talent swap.
+    if reason == "loadoutchange" or reason == "specchange" then
+        if not IsModeEnabled(mode) then return true end
     end
 
     local keyword = mode.skipKeyword
@@ -504,9 +569,11 @@ local function Announce(reason, retryCount, overrideModeKey)
         end
     end
 
+    local instanceType, maxPlayers
     local modeKey = overrideModeKey
     if not modeKey then
-        local _, instanceType, _, _, maxPlayers = GetInstanceInfo()
+        local _
+        _, instanceType, _, _, maxPlayers = GetInstanceInfo()
         modeKey = GetModeKey(instanceType, maxPlayers)
     end
     local mode = modeKey and LoadOutCallerDB.modes and LoadOutCallerDB.modes[modeKey] or nil
@@ -516,6 +583,18 @@ local function Announce(reason, retryCount, overrideModeKey)
         Print(string.format("[debug] reason=%s instType=%s maxP=%s mode=%s keyword=%s build=%q isSaved=%s -> skipped=%s",
             tostring(reason), tostring(instanceType), tostring(maxPlayers), tostring(modeKey),
             tostring(mode and mode.skipKeyword), tostring(buildName), tostring(isSaved), tostring(skipped)))
+        if mode then
+            Print(string.format("[debug] mode cfg: onEnter=%s onReady=%s onMatchStart=%s onInvite=%s | alwaysEnter=%s alwaysReady=%s alwaysMatch=%s alwaysInvite=%s",
+                tostring(mode.announceOnEnter), tostring(mode.announceOnReadyCheck),
+                tostring(mode.announceOnMatchStartCountdown), tostring(mode.announceOnInvite),
+                tostring(mode.alwaysOnEnter), tostring(mode.alwaysOnReadyCheck),
+                tostring(mode.alwaysOnMatchStartCountdown), tostring(mode.alwaysOnInvite)))
+        end
+        Print(string.format("[debug] globals: enabled=%s announceOnSpecChange=%s warnOnRoleMismatch=%s recheckSecs=%s ITL=%s",
+            tostring(LoadOutCallerDB.enabled), tostring(LoadOutCallerDB.announceOnSpecChange),
+            tostring(LoadOutCallerDB.warnOnRoleMismatch),
+            tostring(LoadOutCallerDB.matchStartRecheckSeconds),
+            tostring(ITLAPI ~= nil)))
     end
     if skipped then
         return
@@ -540,6 +619,57 @@ local function TestTTS()
     return SpeakTTS(msg, true)
 end
 ns.TestTTS = TestTTS
+
+-- One-off diagnostic, triggered by the "Print debug snapshot" button and
+-- the /lc debug slash command. Prints regardless of the debug toggle so it
+-- is usable for capturing a bug report in a single click.
+local function PrintDebugSnapshot()
+    local buildName, isSaved = GetActiveBuildName()
+    local _, instanceType, _, _, maxPlayers = GetInstanceInfo()
+    local modeKey = GetModeKey(instanceType, maxPlayers)
+    local mode = modeKey and LoadOutCallerDB.modes and LoadOutCallerDB.modes[modeKey] or nil
+
+    Print("[snapshot] === LoadOutCaller debug snapshot ===")
+
+    local itlLoaded = false
+    if C_AddOns and C_AddOns.IsAddOnLoaded then
+        itlLoaded = C_AddOns.IsAddOnLoaded("ImprovedTalentLoadouts") and true or false
+    elseif IsAddOnLoaded then
+        itlLoaded = IsAddOnLoaded("ImprovedTalentLoadouts") and true or false
+    end
+    Print(string.format("[snapshot] ITL addon loaded=%s ITLAPI=%s GetCurrentLoadout=%s",
+        tostring(itlLoaded), tostring(ITLAPI ~= nil),
+        tostring(ITLAPI and ITLAPI.GetCurrentLoadout ~= nil)))
+    if ITLAPI and ITLAPI.GetCurrentLoadout then
+        local ok, info = pcall(ITLAPI.GetCurrentLoadout, ITLAPI)
+        Print(string.format("[snapshot] ITL GetCurrentLoadout ok=%s hasInfo=%s name=%s",
+            tostring(ok), tostring(info ~= nil), tostring(info and info.name)))
+    end
+
+    Print(string.format("[snapshot] active build: %q isSaved=%s", tostring(buildName), tostring(isSaved)))
+    Print(string.format("[snapshot] instance: instType=%s maxP=%s -> mode=%s",
+        tostring(instanceType), tostring(maxPlayers), tostring(modeKey)))
+
+    if mode then
+        Print(string.format("[snapshot] mode cfg: onEnter=%s onReady=%s onMatchStart=%s onInvite=%s | alwaysEnter=%s alwaysReady=%s alwaysMatch=%s alwaysInvite=%s | skipKeyword=%q",
+            tostring(mode.announceOnEnter), tostring(mode.announceOnReadyCheck),
+            tostring(mode.announceOnMatchStartCountdown), tostring(mode.announceOnInvite),
+            tostring(mode.alwaysOnEnter), tostring(mode.alwaysOnReadyCheck),
+            tostring(mode.alwaysOnMatchStartCountdown), tostring(mode.alwaysOnInvite),
+            tostring(mode.skipKeyword)))
+    else
+        Print("[snapshot] mode cfg: (no tracked mode at current location)")
+    end
+
+    Print(string.format("[snapshot] globals: enabled=%s announceOnSpecChange=%s warnOnRoleMismatch=%s recheckSecs=%s debug=%s",
+        tostring(LoadOutCallerDB.enabled), tostring(LoadOutCallerDB.announceOnSpecChange),
+        tostring(LoadOutCallerDB.warnOnRoleMismatch),
+        tostring(LoadOutCallerDB.matchStartRecheckSeconds),
+        tostring(LoadOutCallerDB.debug)))
+
+    Print("[snapshot] === end ===")
+end
+ns.PrintDebugSnapshot = PrintDebugSnapshot
 
 local lastRoleMismatchState
 local function HandleRoleChanged(changedName)
@@ -699,7 +829,8 @@ local function HandleStartTimer(timerType, timeSeconds, totalTime)
         matchStartRecheckTimer = nil
     end
     local secs = tonumber(timeSeconds) or 0
-    local delay = secs - 8
+    local recheckLead = tonumber(LoadOutCallerDB.matchStartRecheckSeconds) or ns.defaults.matchStartRecheckSeconds
+    local delay = secs - recheckLead
     if delay > 0 then
         matchStartRecheckTimer = C_Timer.NewTimer(delay, function()
             matchStartRecheckTimer = nil
@@ -746,6 +877,8 @@ local function HandleSlash(msg)
     msg = (msg or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
     if msg == "test" then
         Announce("test")
+    elseif msg == "debug" then
+        PrintDebugSnapshot()
     elseif msg == "lock" then
         SetFrameLocked(true)
         Print(L["Display frame locked."])

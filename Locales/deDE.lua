@@ -8,10 +8,17 @@ L["Announces your active talent build on instance enter and ready check."] = "Sa
 L["Addon enabled"] = "Addon aktiviert"
 L["Master switch. When disabled, nothing happens."] = "Haupt-Schalter. Wenn deaktiviert, passiert nichts."
 
+-- PvP match start
+L["PvP match start"] = "PvP-Matchstart"
+L["Last-chance re-check (seconds before match start)"] = "Letzter Check (Sekunden vor Match-Beginn)"
+L["Schedules an extra loadout check this many seconds before the PvP match gates open - last chance to warn you if you swapped to the wrong build mid-countdown."] = "Plant eine zusätzliche Loadout-Prüfung diese Anzahl Sekunden vor dem Match-Beginn - letzte Chance, dich zu warnen falls du mitten im Countdown den falschen Build eingestellt hast."
+
 -- Troubleshooting
 L["Troubleshooting"] = "Fehlersuche"
 L["Debug mode"] = "Debug-Modus"
 L["Prints verbose diagnostic messages to chat (mode detection, battlefield status, skip decisions). Off by default - enable only when reporting a bug."] = "Gibt ausf\195\188hrliche Diagnose-Meldungen im Chat aus (Modus-Erkennung, Battlefield-Status, Skip-Entscheidungen). Standardm\195\164\195\159ig aus - nur zum Melden eines Bugs aktivieren."
+L["Print debug snapshot"] = "Debug-Snapshot ausgeben"
+L["Prints a one-off diagnostic to chat regardless of the debug toggle: ITL detection, active loadout name, current mode, and all relevant settings. Useful for reporting a bug without waiting for a trigger."] = "Gibt einmalig eine Diagnose in den Chat aus (unabhängig vom Debug-Toggle): ITL-Erkennung, aktueller Loadout-Name, aktueller Modus und alle relevanten Einstellungen. Nützlich zum Melden eines Bugs, ohne auf einen Trigger warten zu müssen."
 
 -- Triggers
 L["Announce on ready check"] = "Bei Ready-Check ansagen"

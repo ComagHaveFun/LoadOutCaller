@@ -41,6 +41,7 @@ If you do neither, you will get warned every single time you enter instanced con
 - **Draggable display frame** integrated with Blizzard's **Edit Mode** - no clunky lock/unlock commands needed, just Esc -> Edit Mode.
 - **Fully configurable TTS**: voice, volume, speed, and a custom message template with a `{loadoutname}` placeholder.
 - **11 locales**: English, German, French, Spanish (ES+MX), Italian, Portuguese (BR), Russian, Korean, Simplified + Traditional Chinese.
+- **[Improved Talent Loadouts](https://www.curseforge.com/wow/addons/improvedtalentloadouts) (ITL) support**: if ITL is installed, LoadOutCaller reads the real ITL loadout name. Nothing to configure - works out of the box when both addons are loaded.
 
 ## Installation
 
@@ -106,6 +107,10 @@ The per-mode `Always on …` toggles let you force announcements regardless of t
 
 - World of Warcraft Retail, The War Within / Midnight (Interface `120001`).
 - TTS works out of the box using Blizzard's built-in voice engine; no external dependencies. Requires at least one Windows TTS voice installed (check `Time & Language -> Speech` in Windows).
+
+## Compatibility with Improved Talent Loadouts
+
+[Improved Talent Loadouts](https://www.curseforge.com/wow/addons/improvedtalentloadouts) stores many per-spec profiles client-side and swaps talents into a single shared Blizzard config called `"[ITL] Temp"`. Without integration, LoadOutCaller would always announce that placeholder name. When ITL is loaded, LoadOutCaller queries `ITLAPI:GetCurrentLoadout()` first and falls back to the Blizzard API otherwise - your ITL profile name flows into the skip-keyword check and the spoken / on-screen / chat output exactly like a native Blizzard loadout. No configuration needed.
 
 ## Languages
 

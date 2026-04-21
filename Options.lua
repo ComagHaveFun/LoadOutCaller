@@ -399,14 +399,41 @@ local function BuildRootPanel()
         function(v) LoadOutCallerDB.announceOnSpecChange = v end,
         -148)
 
-    MakeSectionHeader(panel, L["Troubleshooting"], -184)
+    MakeSectionHeader(panel, L["PvP match start"], -184)
+
+    widgets.matchStartRecheckSeconds = MakeSlider(panel, "LoadOutCallerMatchStartRecheckSlider",
+        L["Last-chance re-check (seconds before match start)"], 5, 60, 1,
+        function() return LoadOutCallerDB.matchStartRecheckSeconds end,
+        function(v) LoadOutCallerDB.matchStartRecheckSeconds = v end,
+        -210)
+
+    local recheckHint = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    recheckHint:SetPoint("TOPLEFT", 24, -250)
+    recheckHint:SetWidth(500)
+    recheckHint:SetJustifyH("LEFT")
+    recheckHint:SetText(L["Schedules an extra loadout check this many seconds before the PvP match gates open - last chance to warn you if you swapped to the wrong build mid-countdown."])
+    recheckHint:SetTextColor(0.7, 0.7, 0.7)
+
+    MakeSectionHeader(panel, L["Troubleshooting"], -288)
 
     widgets.debug = MakeCheckbox(panel,
         L["Debug mode"],
         L["Prints verbose diagnostic messages to chat (mode detection, battlefield status, skip decisions). Off by default - enable only when reporting a bug."],
         function() return LoadOutCallerDB.debug end,
         function(v) LoadOutCallerDB.debug = v end,
-        -208)
+        -312)
+
+    widgets.debugSnapshotButton = MakeButton(panel,
+        L["Print debug snapshot"], 200,
+        function() if ns.PrintDebugSnapshot then ns.PrintDebugSnapshot() end end,
+        "TOPLEFT", panel, "TOPLEFT", 24, -344)
+
+    local snapshotHint = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    snapshotHint:SetPoint("TOPLEFT", 24, -372)
+    snapshotHint:SetWidth(500)
+    snapshotHint:SetJustifyH("LEFT")
+    snapshotHint:SetText(L["Prints a one-off diagnostic to chat regardless of the debug toggle: ITL detection, active loadout name, current mode, and all relevant settings. Useful for reporting a bug without waiting for a trigger."])
+    snapshotHint:SetTextColor(0.7, 0.7, 0.7)
 
     return panel
 end
