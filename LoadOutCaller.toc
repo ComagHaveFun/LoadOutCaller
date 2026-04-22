@@ -1,4 +1,4 @@
-## Interface: 120001
+## Interface: 120005
 ## Title: |cff3FC7EBLoadOut|rCaller
 ## Notes: Announces your active talent loadout on instance enter or ready check - via text, chat, TTS and sound. Per-mode triggers for Mythic+, Raids, Delves, Arena 2v2/3v3, and Battlegrounds. Never pull with your questing build again.
 ## Author: Comag-Malfurion (Have Fun)
